@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#0a2a3a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Piscine Cuvier</title>
+  <style>
+    :root {
+      --bleu-nuit:   #0a2a3a;
+      --bleu-fond:   #0d3347;
+      --bleu-eau:    #1a6e8c;
+      --bleu-clair:  #2ab5d8;
+      --cyan-vif:    #00d4f5;
+      --vert-ok:     #22c97a;
+      --orange-alrt: #f59e0b;
+      --rouge-alrt:  #ef4444;
+      --blanc:       #f0f8ff;
+      --gris-doux:   #8ab4c4;
+      --surface:     rgba(255,255,255,0.06);
+      --surface-2:   rgba(255,255,255,0.10);
+      --border:      rgba(255,255,255,0.10);
+      --radius:      16px;
+      --radius-sm:   10px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bleu-nuit);
+      color: var(--blanc);
+      min-height: 100dvh;
+      display: flex; flex-direction: column;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .water-bg {
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(26,110,140,0.35) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(0,212,245,0.12) 0%, transparent 55%),
+        linear-gradient(180deg, #0a2a3a 0%, #0b3550 60%, #0a2a3a 100%);
+      pointer-events: none;
+    }
+    .wave {
+      position: fixed; bottom: 60px; left: 0; right: 0; height: 120px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 120'%3E%3Cpath fill='rgba(0,212,245,0.05)' d='M0,60 C360,120 1080,0 1440,60 L1440,120 L0,120 Z'/%3E%3C/svg%3E") repeat-x;
+      background-size: 1440px 120px;
+      animation: wave 8s linear infinite;
+      pointer-events: none; z-index: 0;
+    }
+    .wave:nth-child(2) { bottom: 60px; opacity: 0.5; animation-duration: 12s; animation-direction: reverse; }
+    @keyframes wave { from { background-position-x: 0 } to { background-position-x: 1440px } }
+
+    /* ── MODAL FIRST LAUNCH ── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(10,42,58,0.96);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-box {
+      background: #0d3347;
+      border: 1px solid rgba(0,212,245,0.25);
+      border-radius: 20px;
+      padding: 28px 24px;
+      max-width: 380px; width: 100%;
+      text-align: center;
+    }
+    .modal-icon { font-size: 48px; margin-bottom: 16px; }
+    .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .modal-sub { font-size: 14px; color: var(--gris-doux); line-height: 1.6; margin-bottom: 24px; }
+    .modal-btn {
+      display: block; width: 100%;
+      border: none; border-radius: 12px;
+      padding: 14px; font-size: 15px; font-weight: 700;
+      cursor: pointer; margin-bottom: 10px;
+      transition: opacity 0.15s;
+    }
+    .modal-btn:active { opacity: 0.8; }
+    .modal-btn-primary {
+      background: linear-gradient(135deg, var(--bleu-eau), var(--cyan-vif));
+      color: var(--bleu-nuit);
+    }
+    .modal-btn-secondary {
+      background: var(--surface-2);
+      color: var(--blanc);
+      border: 1px solid var(--border);
+    }
+    .modal-hours-row {
+      display: none; align-items: center; gap: 10px;
+      margin-bottom: 16px; justify-content: center;
+    }
+    .modal-hours-row.visible { display: flex; }
+    .modal-hours-input {
+      width: 80px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--blanc); font-size: 18px; font-weight: 700;
+      padding: 8px 12px; text-align: center;
+      -moz-appearance: textfield;
+    }
+    .modal-hours-input::-webkit-inner-spin-button,
+    .modal-hours-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .modal-hours-label { font-size: 14px; color: var(--gris-doux); }
+
+    /* ── LAYOUT ── */
+    .app {
+      position: relative; z-index: 1;
+      flex: 1; display: flex; flex-direction: column;
+      max-width: 480px; margin: 0 auto; width: 100%;
+      padding-bottom: 72px;
+    }
+    header {
+      padding: 20px 20px 12px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--bleu-eau), var(--cyan-vif));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; box-shadow: 0 2px 12px rgba(0,212,245,0.3);
+    }
+    .logo-text { font-size: 17px; font-weight: 700; }
+    .logo-sub  { font-size: 11px; color: var(--gris-doux); }
+    .header-badge {
+      font-size: 11px; color: var(--gris-doux);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 4px 10px;
+    }
+    .screen { display: none; padding: 0 16px; animation: fadeIn 0.2s ease; }
+    .screen.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+    .section-title {
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1.2px;
+      color: var(--gris-doux); margin: 20px 0 10px;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+      backdrop-filter: blur(8px);
+    }
+    .card-title {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--gris-doux); margin-bottom: 10px;
+    }
+
+    /* ── MÉTÉO ── */
+    .meteo-card {
+      background: linear-gradient(135deg, rgba(26,110,140,0.4), rgba(0,212,245,0.1));
+      border: 1px solid rgba(0,212,245,0.2);
+      border-radius: var(--radius); padding: 16px 18px; margin-bottom: 12px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .meteo-left .lieu { font-size: 12px; color: var(--gris-doux); }
+    .meteo-left .date { font-size: 12px; color: var(--gris-doux); }
+    .meteo-left .desc { font-size: 14px; font-weight: 600; margin-top: 6px; }
+    .meteo-right { text-align: right; }
+    .meteo-temp-main { font-size: 32px; font-weight: 300; line-height: 1; }
+    .meteo-details { font-size: 11px; color: var(--gris-doux); margin-top: 4px; }
+    .meteo-icon { font-size: 28px; }
+
+    /* ── FILTRATION ── */
+    .filtration-card {
+      background: linear-gradient(135deg, rgba(34,201,122,0.15), rgba(34,201,122,0.05));
+      border: 1px solid rgba(34,201,122,0.25);
+      border-radius: var(--radius); padding: 14px 18px; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .filtration-icon { font-size: 28px; }
+    .filtration-label { font-size: 12px; color: var(--gris-doux); }
+    .filtration-value { font-size: 22px; font-weight: 700; color: var(--vert-ok); }
+    .filtration-sub   { font-size: 12px; color: var(--gris-doux); }
+    .temp-input-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .temp-input-row label { font-size: 12px; color: var(--gris-doux); white-space: nowrap; }
+    .temp-input {
+      width: 70px; background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--blanc); font-size: 15px; font-weight: 600;
+      padding: 6px 10px; text-align: center; -moz-appearance: textfield;
+    }
+    .temp-input::-webkit-inner-spin-button,
+    .temp-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .temp-input:focus { outline: none; border-color: var(--cyan-vif); }
+    .temp-unit { font-size: 14px; color: var(--gris-doux); }
+
+    /* ── JAUGE CARTOUCHE ── */
+    .filtre-card {
+      border-radius: var(--radius); padding: 14px 18px; margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+    .filtre-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .filtre-title { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .filtre-pct { font-size: 13px; font-weight: 700; }
+    .filtre-bar-bg {
+      height: 10px; border-radius: 5px;
+      background: rgba(255,255,255,0.1); overflow: hidden; margin-bottom: 8px;
+    }
+    .filtre-bar-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
+    .filtre-sub { display: flex; justify-content: space-between; font-size: 11px; color: var(--gris-doux); }
+    .btn-reset-filtre {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; margin-top: 10px;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--gris-doux);
+      font-size: 12px; font-weight: 600; padding: 8px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-reset-filtre:active { background: rgba(255,255,255,0.12); }
+
+    /* ── PARAMS GRILLE ── */
+    .params-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 12px;
+    }
+    .param-tile {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px;
+    }
+    .param-label { font-size: 11px; color: var(--gris-doux); margin-bottom: 4px; }
+    .param-value { font-size: 22px; font-weight: 700; line-height: 1; }
+    .param-unit  { font-size: 12px; color: var(--gris-doux); }
+    .param-age   { font-size: 10px; color: var(--gris-doux); margin-top: 4px; }
+    .status-ok     { color: var(--vert-ok); }
+    .status-warn   { color: var(--orange-alrt); }
+    .status-danger { color: var(--rouge-alrt); }
+    .last-test-banner {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; color: var(--gris-doux);
+    }
+    .last-test-banner strong { color: var(--blanc); font-size: 13px; }
+
+    /* ── BOUTONS ── */
+    .btn-primary {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%;
+      background: linear-gradient(135deg, var(--bleu-eau), var(--cyan-vif));
+      color: var(--bleu-nuit); font-size: 15px; font-weight: 700;
+      border: none; border-radius: var(--radius); padding: 16px;
+      cursor: pointer; box-shadow: 0 4px 20px rgba(0,212,245,0.3);
+      transition: transform 0.15s, box-shadow 0.15s; margin-bottom: 10px;
+    }
+    .btn-primary:active { transform: scale(0.97); box-shadow: none; }
+    .btn-secondary {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; background: var(--surface-2); color: var(--blanc);
+      font-size: 14px; font-weight: 600; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px;
+      cursor: pointer; transition: background 0.15s; margin-bottom: 10px;
+    }
+    .btn-secondary:active { background: rgba(255,255,255,0.15); }
+
+    /* ── ÉCRAN ANALYSE ── */
+    .input-group {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px; margin-bottom: 12px;
+    }
+    .input-group label {
+      display: block; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--gris-doux); margin-bottom: 8px;
+    }
+    .natural-input {
+      width: 100%; background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--blanc); font-size: 15px; padding: 12px 14px;
+      resize: none; min-height: 80px; font-family: inherit;
+    }
+    .natural-input:focus { outline: none; border-color: var(--cyan-vif); }
+    .natural-input::placeholder { color: var(--gris-doux); font-size: 14px; }
+    .mic-row { display: flex; gap: 10px; margin-bottom: 12px; }
+    .btn-mic {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: rgba(0,212,245,0.1); border: 1px solid rgba(0,212,245,0.3);
+      border-radius: var(--radius); color: var(--cyan-vif);
+      font-size: 14px; font-weight: 600; padding: 14px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-mic:active { background: rgba(0,212,245,0.2); }
+    .photo-zone {
+      border: 2px dashed rgba(0,212,245,0.3); border-radius: var(--radius);
+      padding: 32px 20px; text-align: center; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s; margin-bottom: 12px;
+    }
+    .photo-zone:active { border-color: var(--cyan-vif); background: rgba(0,212,245,0.05); }
+    .photo-icon { font-size: 40px; margin-bottom: 10px; }
+    .photo-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .photo-sub   { font-size: 12px; color: var(--gris-doux); }
+    #photo-input { display: none; }
+
+    /* ── FORMULAIRE MANUEL ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .form-field {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 10px 12px;
+    }
+    .form-field label { display: block; font-size: 10px; color: var(--gris-doux); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-field input {
+      width: 100%; background: transparent; border: none;
+      color: var(--blanc); font-size: 18px; font-weight: 700;
+      -moz-appearance: textfield; font-family: inherit;
+    }
+    .form-field input::-webkit-inner-spin-button,
+    .form-field input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .form-field input:focus { outline: none; }
+    .form-field input::placeholder { color: rgba(255,255,255,0.2); font-weight: 400; font-size: 16px; }
+    .form-unit { font-size: 10px; color: var(--gris-doux); }
+
+    /* ── RÉSULTATS DOSAGES ── */
+    .dosage-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .dosage-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .dosage-step {
+      min-width: 24px; height: 24px; border-radius: 50%;
+      background: var(--bleu-eau); color: var(--blanc);
+      font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .dosage-produit { font-weight: 700; color: var(--cyan-vif); }
+    .dosage-desc    { color: var(--gris-doux); font-size: 12px; margin-top: 2px; }
+
+    /* ── HISTORIQUE ── */
+    .history-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px; margin-bottom: 8px;
+    }
+    .history-date { font-size: 11px; color: var(--gris-doux); margin-bottom: 8px; }
+    .history-params { display: flex; flex-wrap: wrap; gap: 8px; }
+    .history-tag {
+      font-size: 12px; font-weight: 600;
+      background: rgba(255,255,255,0.08); border-radius: 6px; padding: 3px 8px;
+    }
+    .chart-placeholder {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); height: 160px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gris-doux); font-size: 13px; margin-bottom: 12px;
+    }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--gris-doux); }
+    .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state p { font-size: 14px; line-height: 1.5; }
+
+    /* ── MÉMO ── */
+    .cible-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+    }
+    .cible-row:last-child { border-bottom: none; }
+    .cible-param { color: var(--gris-doux); }
+    .cible-val   { font-weight: 700; }
+    .memo-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .memo-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .memo-table td:first-child { color: var(--gris-doux); width: 55%; }
+    .memo-table td:last-child  { font-weight: 600; }
+    .memo-table tr:last-child td { border-bottom: none; }
+    .routine-day { font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .routine-day:last-child { border-bottom: none; }
+    .routine-day strong { color: var(--cyan-vif); }
+
+    /* ── BANDEAU ALERTE ── */
+    .alerte-banner {
+      display: none;
+      background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4);
+      border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 12px;
+      font-size: 13px; color: #fca5a5;
+      display: none; align-items: center; gap: 10px;
+    }
+    .alerte-banner.visible { display: flex; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(10,42,58,0.95); backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border);
+      display: flex; z-index: 100;
+      max-width: 480px; margin: 0 auto;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 4px 8px; cursor: pointer;
+      border: none; background: none; color: var(--gris-doux);
+      font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px; gap: 4px;
+      transition: color 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .nav-item .nav-icon { font-size: 20px; line-height: 1; }
+    .nav-item.active { color: var(--cyan-vif); }
+    @media (min-width: 480px) {
+      nav { left: 50%; transform: translateX(-50%); width: 480px; }
+    }
+
+    /* ── MODAL API KEY ── */
+    .modal-apikey .modal-box { text-align: left; }
+    .apikey-input {
+      width: 100%; background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(0,212,245,0.3); border-radius: 10px;
+      color: var(--blanc); font-size: 13px; font-family: monospace;
+      padding: 12px 14px; margin-bottom: 16px; letter-spacing: 0.5px;
+    }
+    .apikey-input:focus { outline: none; border-color: var(--cyan-vif); }
+    .apikey-hint { font-size: 11px; color: var(--gris-doux); line-height: 1.6; margin-bottom: 16px; }
+    .apikey-hint a { color: var(--cyan-vif); }
+
+    /* ── LOADER IA ── */
+    .ia-loader {
+      display: none; flex-direction: column; align-items: center;
+      justify-content: center; padding: 32px; gap: 14px;
+    }
+    .ia-loader.visible { display: flex; }
+    .loader-spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid rgba(0,212,245,0.2);
+      border-top-color: var(--cyan-vif);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-txt { font-size: 13px; color: var(--gris-doux); text-align: center; }
+
+    /* ── PREVIEW PHOTO ── */
+    .photo-preview {
+      width: 100%; max-height: 200px; object-fit: contain;
+      border-radius: var(--radius-sm); margin-bottom: 12px; display: none;
+    }
+    .photo-preview.visible { display: block; }
+
+    /* ── BADGE IA ── */
+    .badge-ia {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; padding: 3px 8px; border-radius: 20px;
+      background: rgba(0,212,245,0.15); color: var(--cyan-vif);
+      border: 1px solid rgba(0,212,245,0.3); margin-left: 8px;
+    }
+
+    /* ── ÉCRAN PARAMÈTRES ── */
+    .param-section { margin-bottom: 20px; }
+    .param-row {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px 16px;
+      margin-bottom: 8px;
+    }
+    .param-row-label { font-size: 12px; color: var(--gris-doux); margin-bottom: 6px; font-weight: 600; }
+    .param-row-val { font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+    .btn-small {
+      font-size: 12px; font-weight: 600; padding: 6px 14px;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface-2); color: var(--blanc); cursor: pointer;
+    }
+    .btn-small:active { background: rgba(255,255,255,0.15); }
+    .btn-danger { border-color: rgba(239,68,68,0.4); color: #fca5a5; background: rgba(239,68,68,0.1); }
+    /* ── COURBES ── */
+    .chart-param-tabs {
+      display: flex; gap: 8px; margin-bottom: 10px; overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .chart-param-tabs::-webkit-scrollbar { display: none; }
+    .chart-tab {
+      flex-shrink: 0; padding: 6px 16px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--gris-doux); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .chart-tab.active {
+      background: var(--bleu-eau); border-color: var(--cyan-vif);
+      color: var(--blanc);
+    }
+
+    /* ── HISTORY ITEMS ── */
+    .history-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px; margin-bottom: 8px;
+    }
+    .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .history-date { font-size: 12px; color: var(--gris-doux); }
+    .history-delete {
+      font-size: 11px; color: var(--rouge-alrt); background: none;
+      border: none; cursor: pointer; padding: 2px 6px;
+    }
+    .history-params { display: flex; flex-wrap: wrap; gap: 6px; }
+    .history-tag {
+      font-size: 12px; font-weight: 600;
+      border-radius: 6px; padding: 3px 8px;
+    }
+    .history-tag-ok     { background: rgba(34,201,122,0.15);  color: var(--vert-ok); }
+    .history-tag-warn   { background: rgba(245,158,11,0.15);  color: var(--orange-alrt); }
+    .history-tag-danger { background: rgba(239,68,68,0.15);   color: var(--rouge-alrt); }
+    .history-tag-neu    { background: rgba(255,255,255,0.08); color: var(--gris-doux); }
+  </style>
+</head>
+<body>
+
+<div class="water-bg"></div>
+<div class="wave"></div>
+<div class="wave"></div>
+
+<!-- ══ MODAL PREMIER LANCEMENT ══ -->
+<div class="modal-overlay hidden" id="modal-firstlaunch">
+  <div class="modal-box">
+    <div class="modal-icon">🔧</div>
+    <div class="modal-title">Cartouche filtre</div>
+    <div class="modal-sub">Pour calculer l'usure de ta cartouche,<br>dis-moi où tu en es aujourd'hui.</div>
+    <div class="modal-hours-row" id="modal-hours-row">
+      <input type="number" class="modal-hours-input" id="modal-hours-val" min="0" max="72" placeholder="0" />
+      <span class="modal-hours-label">heures déjà filtrées</span>
+    </div>
+    <button class="modal-btn modal-btn-primary" onclick="initFiltre(0)">🆕 Cartouche neuve (0 h)</button>
+    <button class="modal-btn modal-btn-secondary" id="btn-estimer" onclick="toggleEstimer()">⏱ Estimer les heures déjà faites</button>
+    <button class="modal-btn modal-btn-secondary hidden" id="btn-valider-heures" onclick="validerHeures()">✓ Valider</button>
+  </div>
+</div>
+
+<!-- ══ MODAL API KEY ══ -->
+<div class="modal-overlay hidden modal-apikey" id="modal-apikey">
+  <div class="modal-box">
+    <div class="modal-icon" style="text-align:center">🔑</div>
+    <div class="modal-title" style="text-align:center">Clé API Anthropic</div>
+    <div class="apikey-hint">
+      Ta clé est stockée <strong>uniquement sur ton téléphone</strong>.<br><br>
+      Tu la trouves sur <span style="color:var(--cyan-vif)">console.anthropic.com</span> → API Keys.
+      Elle commence par <span style="color:var(--cyan-vif);font-family:monospace">sk-ant-</span>
+    </div>
+    <input type="password" class="apikey-input" id="apikey-input" placeholder="sk-ant-api03-…" autocomplete="off" />
+    <button class="modal-btn modal-btn-primary" onclick="sauvegarderApiKey()">✓ Enregistrer</button>
+    <button class="modal-btn modal-btn-secondary" onclick="document.getElementById('modal-apikey').classList.add('hidden')">Plus tard (saisie manuelle uniquement)</button>
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🏊</div>
+      <div>
+        <div class="logo-text">Piscine Cuvier</div>
+        <div class="logo-sub">Intex 28272NP · 3 834 L</div>
+      </div>
+    </div>
+    <div class="header-badge" id="header-date"></div>
+  </header>
+
+  <!-- ══ DASHBOARD ══ -->
+  <section class="screen active" id="screen-dashboard">
+
+    <!-- Bandeau alerte cartouche -->
+    <div class="alerte-banner" id="alerte-filtre">
+      🔴 <span id="alerte-filtre-txt">Cartouche à changer !</span>
+    </div>
+
+    <p class="section-title">🌤 Météo locale</p>
+    <div class="meteo-card">
+      <div class="meteo-left">
+        <div class="lieu">📍 Cuvier, Jura</div>
+        <div class="date" id="meteo-date"></div>
+        <div class="desc" id="meteo-desc">Chargement…</div>
+      </div>
+      <div class="meteo-right">
+        <div class="meteo-icon" id="meteo-icon">⏳</div>
+        <div class="meteo-temp-main"><span id="meteo-temp">--</span>°</div>
+        <div class="meteo-details" id="meteo-details">Humidité : --% · --</div>
+      </div>
+    </div>
+
+    <p class="section-title">⚙️ Filtration & cartouche</p>
+    <div class="filtration-card">
+      <div class="filtration-icon">💧</div>
+      <div style="flex:1">
+        <div class="filtration-label">Durée recommandée</div>
+        <div class="filtration-value" id="filtration-value">-- h/jour</div>
+        <div class="filtration-sub">Plages 11h–21h de préférence</div>
+        <div class="temp-input-row">
+          <label for="temp-eau">T° eau :</label>
+          <input type="number" id="temp-eau" class="temp-input" min="10" max="40" placeholder="--" />
+          <span class="temp-unit">°C</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Jauge cartouche -->
+    <div class="filtre-card" id="filtre-card">
+      <div class="filtre-header">
+        <div class="filtre-title">🔧 <span>Cartouche filtre</span></div>
+        <div class="filtre-pct" id="filtre-pct">--%</div>
+      </div>
+      <div class="filtre-bar-bg">
+        <div class="filtre-bar-fill" id="filtre-bar" style="width:0%"></div>
+      </div>
+      <div class="filtre-sub">
+        <span id="filtre-heures">-- h / 72 h</span>
+        <span id="filtre-statut">--</span>
+      </div>
+      <button class="btn-reset-filtre" onclick="confirmResetFiltre()">✅ Cartouche remplacée → remettre à zéro</button>
+    </div>
+
+    <div class="last-test-banner">
+      <span>Dernier test</span>
+      <strong id="last-test-age">Aucune analyse</strong>
+    </div>
+
+    <p class="section-title">🧪 État de l'eau</p>
+    <div class="params-grid" id="params-grid">
+      <div class="param-tile"><div class="param-label">pH</div><div class="param-value status-ok" id="dash-ph">--</div><div class="param-age">--</div></div>
+      <div class="param-tile"><div class="param-label">Chlore libre</div><div class="param-value" id="dash-cl">-- <span class="param-unit">mg/L</span></div><div class="param-age">--</div></div>
+      <div class="param-tile"><div class="param-label">TAC</div><div class="param-value" id="dash-tac">-- <span class="param-unit">ppm</span></div><div class="param-age">--</div></div>
+      <div class="param-tile"><div class="param-label">Stabilisant</div><div class="param-value" id="dash-cya">-- <span class="param-unit">ppm</span></div><div class="param-age">--</div></div>
+      <div class="param-tile"><div class="param-label">TH</div><div class="param-value" id="dash-th">-- <span class="param-unit">ppm</span></div><div class="param-age">--</div></div>
+      <div class="param-tile"><div class="param-label">Chlore total</div><div class="param-value" id="dash-ct">-- <span class="param-unit">mg/L</span></div><div class="param-age">--</div></div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('analyse')">
+      <span>📷</span> Analyser ma bandelette
+    </button>
+
+  </section>
+
+  <!-- ══ ANALYSE ══ -->
+  <section class="screen" id="screen-analyse">
+
+    <p class="section-title">📷 Bandelette photo</p>
+    <div class="photo-zone" onclick="document.getElementById('photo-input').click()">
+      <div class="photo-icon">📸</div>
+      <div class="photo-title">Prendre une photo</div>
+      <div class="photo-sub">Bandelette à l'ombre · 7 cases visibles<br>Claude lira les valeurs automatiquement</div>
+    </div>
+    <img id="photo-preview" class="photo-preview" alt="Aperçu bandelette" />
+    <input type="file" id="photo-input" accept="image/*" capture="environment" />
+
+    <p class="section-title">✏️ Saisie manuelle</p>
+
+    <div class="mic-row">
+      <button class="btn-mic" id="btn-mic">🎤 Dicter</button>
+    </div>
+
+    <div class="input-group">
+      <label>Dicte ou tape tes valeurs</label>
+      <textarea class="natural-input" id="natural-input"
+        placeholder='Ex : "pH 7,4, chlore 0,5, TAC 60, T° 24 degrés"'></textarea>
+    </div>
+
+    <p class="section-title">🔢 Ou renseigne case par case</p>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>pH <span class="form-unit">(7,0–7,4)</span></label>
+        <input type="number" id="f-ph" step="0.1" min="0" max="14" placeholder="7,2" />
+      </div>
+      <div class="form-field">
+        <label>Chlore libre <span class="form-unit">mg/L</span></label>
+        <input type="number" id="f-cl" step="0.5" min="0" max="20" placeholder="1,5" />
+      </div>
+      <div class="form-field">
+        <label>Chlore total <span class="form-unit">mg/L</span></label>
+        <input type="number" id="f-ct" step="0.5" min="0" max="20" placeholder="2,0" />
+      </div>
+      <div class="form-field">
+        <label>TAC <span class="form-unit">ppm</span></label>
+        <input type="number" id="f-tac" step="10" min="0" max="300" placeholder="80" />
+      </div>
+      <div class="form-field">
+        <label>CYA stabilisant <span class="form-unit">ppm</span></label>
+        <input type="number" id="f-cya" step="10" min="0" max="300" placeholder="45" />
+      </div>
+      <div class="form-field">
+        <label>TH dureté <span class="form-unit">ppm</span></label>
+        <input type="number" id="f-th" step="10" min="0" max="500" placeholder="100" />
+      </div>
+      <div class="form-field">
+        <label>T° eau <span class="form-unit">°C</span></label>
+        <input type="number" id="f-temp" step="1" min="10" max="40" placeholder="24" />
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="calculerDosages()">⚗️ Calculer les dosages <span class="badge-ia">✨ IA</span></button>
+
+    <!-- Loader IA -->
+    <div class="ia-loader" id="ia-loader">
+      <div class="loader-spinner"></div>
+      <div class="loader-txt" id="ia-loader-txt">Claude analyse ta bandelette…</div>
+    </div>
+
+    <!-- Résultats -->
+    <div id="result-card" style="display:none">
+      <p class="section-title">✅ Résultats</p>
+      <div class="card">
+        <div class="card-title">📊 Valeurs saisies</div>
+        <div id="result-values-grid" class="form-grid" style="margin-bottom:0"></div>
+      </div>
+      <div class="card" id="result-dosages-card">
+        <div class="card-title">🧴 Plan d'action · 3 834 L</div>
+        <div id="dosages-list"></div>
+      </div>
+      <div class="card" id="result-conseil-card" style="display:none">
+        <div class="card-title">💬 Conseil</div>
+        <div id="conseil-text" style="font-size:14px;line-height:1.6"></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ HISTORIQUE ══ -->
+  <section class="screen" id="screen-historique">
+    <p class="section-title">📈 Évolution</p>
+
+    <!-- Sélecteur de paramètre pour la courbe -->
+    <div class="chart-param-tabs" id="chart-tabs">
+      <button class="chart-tab active" data-param="ph" onclick="afficherCourbe('ph')">pH</button>
+      <button class="chart-tab" data-param="cl" onclick="afficherCourbe('cl')">Chlore</button>
+      <button class="chart-tab" data-param="tac" onclick="afficherCourbe('tac')">TAC</button>
+      <button class="chart-tab" data-param="cya" onclick="afficherCourbe('cya')">CYA</button>
+    </div>
+    <div class="card" style="padding:12px">
+      <svg id="courbe-svg" width="100%" height="160" viewBox="0 0 340 160" preserveAspectRatio="none">
+        <text x="170" y="85" text-anchor="middle" fill="#8ab4c4" font-size="13">
+          Aucune donnée — fais ta première analyse !
+        </text>
+      </svg>
+    </div>
+
+    <!-- Export -->
+    <button class="btn-secondary" onclick="exporterExcel()">
+      📊 Exporter en Excel (.xlsx)
+    </button>
+
+    <p class="section-title">📋 Analyses enregistrées</p>
+    <div id="history-list">
+      <div class="empty-state">
+        <div class="empty-icon">🔬</div>
+        <p>Aucune analyse enregistrée.<br>Teste ton eau et utilise l'écran Analyser !</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ MÉMO ══ -->
+  <section class="screen" id="screen-memo">
+    <p class="section-title">🎯 Cibles eau saine</p>
+    <div class="card">
+      <div class="cible-row"><span class="cible-param">pH</span><span class="cible-val status-ok">7,0 – 7,4</span></div>
+      <div class="cible-row"><span class="cible-param">Chlore libre</span><span class="cible-val status-ok">1 – 3 mg/L</span></div>
+      <div class="cible-row"><span class="cible-param">TAC (alcalinité)</span><span class="cible-val status-ok">80 – 120 ppm</span></div>
+      <div class="cible-row"><span class="cible-param">Stabilisant (CYA)</span><span class="cible-val status-ok">30 – 75 ppm</span></div>
+      <div class="cible-row"><span class="cible-param">TH (dureté)</span><span class="cible-val status-ok">~100 ppm ✓ Cuvier</span></div>
+    </div>
+    <p class="section-title">🧴 Dosages · 3 834 L</p>
+    <div class="card">
+      <table class="memo-table">
+        <tr><td>Chlore choc poudre</td><td>38 g</td></tr>
+        <tr><td>Chlore choc ½ dose</td><td>20 g</td></tr>
+        <tr><td>Galet chlore 20 g</td><td>1–2 / semaine</td></tr>
+        <tr><td>pH- (bisulfate Na)</td><td>38 g → -0,2 pH</td></tr>
+        <tr><td>pH+ (carbonate Na)</td><td>38 g → +0,2 pH</td></tr>
+        <tr><td>Bicarbonate La Baleine</td><td>65 g → +10 ppm TAC</td></tr>
+        <tr><td>Stabilisant (CYA)</td><td>115 g (1×/saison)</td></tr>
+        <tr><td>Anti-algues préventif</td><td>20 ml / semaine</td></tr>
+        <tr><td>Anti-algues curatif</td><td>75 ml</td></tr>
+        <tr><td>Floculant</td><td>¼ chaussette</td></tr>
+      </table>
+    </div>
+    <p class="section-title">📅 Routine</p>
+    <div class="card">
+      <div class="routine-day"><strong>Lun & Jeu</strong> — Test pH + chlore · Ajustements</div>
+      <div class="routine-day"><strong>Lundi</strong> — Galet chlore + 20 ml anti-algues</div>
+      <div class="routine-day"><strong>Mer & Dim</strong> — Vider panier préfiltre</div>
+      <div class="routine-day"><strong>Samedi</strong> — Brossage + nettoyage cartouche</div>
+      <div class="routine-day" style="border:none"><strong>Mensuel</strong> — Choc 38 g · Test TAC + CYA</div>
+    </div>
+    <p class="section-title">⚠️ Sécurité</p>
+    <div class="card" style="font-size:13px;line-height:1.9">
+      🧤 Gants obligatoires<br>
+      🪣 Toujours diluer dans un seau d'eau de piscine<br>
+      ⛔ Jamais 2 produits ensemble — espacer ≥ 2 h<br>
+      🚫 Pas de baignade 12 h après un choc<br>
+      🔄 Ordre obligatoire : TAC → pH → chlore
+    </div>
+  </section>
+
+  <!-- ══ PARAMÈTRES ══ -->
+  <section class="screen" id="screen-params">
+    <p class="section-title">🔑 Connexion IA</p>
+    <div class="param-row">
+      <div class="param-row-label">Clé API Anthropic</div>
+      <div class="param-row-val">
+        <span id="apikey-status">Non configurée</span>
+        <button class="btn-small" onclick="demanderApiKey()">Modifier</button>
+      </div>
+    </div>
+    <div class="card" style="font-size:12px;color:var(--gris-doux);line-height:1.7">
+      La clé API est stockée localement sur ton Pixel (localStorage).<br>
+      Elle permet à Claude d'analyser les photos de bandelette et de comprendre tes dictées.<br>
+      Sans clé : saisie manuelle uniquement.
+    </div>
+
+    <p class="section-title">🔧 Cartouche filtre</p>
+    <div class="param-row">
+      <div class="param-row-label">Heures filtrées depuis dernier remplacement</div>
+      <div class="param-row-val">
+        <span id="params-filtre-heures">-- h</span>
+        <button class="btn-small btn-danger" onclick="confirmResetFiltre()">Remettre à zéro</button>
+      </div>
+    </div>
+
+    <p class="section-title">ℹ️ Appli</p>
+    <div class="param-row">
+      <div class="param-row-label">Version</div>
+      <div class="param-row-val"><span>Tranche 4 · Juin 2026</span></div>
+    </div>
+    <div class="param-row">
+      <div class="param-row-label">Volume piscine</div>
+      <div class="param-row-val"><span>3 834 L — Intex 28272NP</span></div>
+    </div>
+    <div class="param-row">
+      <div class="param-row-label">Localisation météo</div>
+      <div class="param-row-val"><span>Cuvier, Jura (46.65°N 5.93°E)</span></div>
+    </div>
+  </section>
+
+</div><!-- .app -->
+
+<nav>
+  <button class="nav-item active" data-screen="dashboard" onclick="goTo('dashboard')">
+    <span class="nav-icon">🏠</span>Accueil
+  </button>
+  <button class="nav-item" data-screen="analyse" onclick="goTo('analyse')">
+    <span class="nav-icon">🔬</span>Analyser
+  </button>
+  <button class="nav-item" data-screen="historique" onclick="goTo('historique')">
+    <span class="nav-icon">📈</span>Historique
+  </button>
+  <button class="nav-item" data-screen="memo" onclick="goTo('memo')">
+    <span class="nav-icon">📋</span>Mémo
+  </button>
+  <button class="nav-item" data-screen="params" onclick="goTo('params')">
+    <span class="nav-icon">⚙️</span>Réglages
+  </button>
+</nav>
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════
+   CONSTANTES DOSAGES — 3 834 L (codées en dur)
+══════════════════════════════════════════ */
+const DOSAGES = {
+  VOLUME: 3834,
+  FILTRE_DUREE_VIE: 72, // heures
+  CIBLES: {
+    ph:  { min: 7.0, max: 7.4 },
+    cl:  { min: 1.0, max: 3.0 },
+    ct:  { min: 1.0, max: 3.5 },
+    tac: { min: 80,  max: 120 },
+    cya: { min: 30,  max: 75  },
+    th:  { min: 80,  max: 250 }
+  },
+  // Dose par unité de correction
+  PH_MOINS_PAR_02:   38,  // g pour baisser pH de 0.2
+  PH_PLUS_PAR_02:    38,  // g pour monter pH de 0.2
+  BICA_PAR_10PPM:    65,  // g bicarbonate pour +10 ppm TAC
+  CHOC_PLEIN:        38,  // g
+  CHOC_DEMI:         20,  // g
+  ANTIALGUES_PREV:   20,  // ml/semaine
+  ANTIALGUES_CURAT:  75,  // ml
+  FLOCULANT:        '¼ chaussette'
+};
+
+/* ══ ÉTAT LOCAL ══ */
+let state = {
+  filtreHeures: 0,
+  filtreDate: null,
+  analyses: []
+};
+
+/* ══════════════════════════════════════════
+   TRANCHE 4 — INDEXEDDB + HISTORIQUE + COURBES
+══════════════════════════════════════════ */
+
+const DB_NAME    = 'PiscineCuvier';
+const DB_VERSION = 1;
+let db = null;
+
+async function ouvrirDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('analyses')) {
+        const store = d.createObjectStore('analyses', { keyPath: 'id', autoIncrement: true });
+        store.createIndex('date', 'date', { unique: false });
+      }
+      if (!d.objectStoreNames.contains('config')) {
+        d.createObjectStore('config', { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function sauvegarderConfig(key, value) {
+  if (!db) return;
+  return new Promise((res, rej) => {
+    const tx = db.transaction('config', 'readwrite');
+    tx.objectStore('config').put({ key, value });
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+
+async function lireConfig(key) {
+  if (!db) return null;
+  return new Promise((res, rej) => {
+    const tx  = db.transaction('config', 'readonly');
+    const req = tx.objectStore('config').get(key);
+    req.onsuccess = e => res(e.target.result?.value ?? null);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function sauvegarderAnalyse(vals, conseil) {
+  if (!db) return;
+  const analyse = {
+    date:    new Date().toISOString(),
+    ph:      vals.ph   || null,
+    cl:      vals.cl   || null,
+    ct:      vals.ct   || null,
+    tac:     vals.tac  || null,
+    cya:     vals.cya  || null,
+    th:      vals.th   || null,
+    temp:    vals.temp || null,
+    conseil: conseil   || ''
+  };
+  return new Promise((res, rej) => {
+    const tx  = db.transaction('analyses', 'readwrite');
+    const req = tx.objectStore('analyses').add(analyse);
+    req.onsuccess = e => { analyse.id = e.target.result; res(analyse); };
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function lireAnalyses() {
+  if (!db) return [];
+  return new Promise((res, rej) => {
+    const tx  = db.transaction('analyses', 'readonly');
+    const req = tx.objectStore('analyses').index('date').getAll();
+    req.onsuccess = e => res(e.target.result.reverse()); // plus récent en premier
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function supprimerAnalyse(id) {
+  if (!db) return;
+  return new Promise((res, rej) => {
+    const tx = db.transaction('analyses', 'readwrite');
+    tx.objectStore('analyses').delete(id);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+
+/* ══ AFFICHAGE HISTORIQUE ══ */
+async function majHistorique() {
+  const analyses = await lireAnalyses();
+  state.analyses  = analyses;
+  const container = document.getElementById('history-list');
+
+  if (analyses.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🔬</div>
+      <p>Aucune analyse enregistrée.<br>Teste ton eau et utilise l'écran Analyser !</p>
+    </div>`;
+    return;
+  }
+
+  const J = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const M = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
+
+  container.innerHTML = analyses.map(a => {
+    const d     = new Date(a.date);
+    const label = J[d.getDay()] + ' ' + d.getDate() + ' ' + M[d.getMonth()] + ' · ' +
+                  d.getHours() + 'h' + String(d.getMinutes()).padStart(2,'0');
+
+    function tag(val, label, unit, min, max, dec) {
+      if (val == null || isNaN(val)) return '';
+      const affiche = parseFloat(val).toFixed(dec).replace('.', ',') + (unit ? ' ' + unit : '');
+      let cls;
+      if (val >= min && val <= max) cls = 'history-tag-ok';
+      else if (val < min * 0.75 || val > max * 1.3) cls = 'history-tag-danger';
+      else cls = 'history-tag-warn';
+      return `<span class="history-tag ${cls}">${label} ${affiche}</span>`;
+    }
+
+    return `<div class="history-item">
+      <div class="history-header">
+        <span class="history-date">📅 ${label}</span>
+        <button class="history-delete" onclick="supprimerEtMaj(${a.id})">🗑</button>
+      </div>
+      <div class="history-params">
+        ${tag(a.ph,  'pH',     '',      7.0, 7.4,  1)}
+        ${tag(a.cl,  'Cl',     'mg/L',  1.0, 3.0,  1)}
+        ${tag(a.tac, 'TAC',    'ppm',   80,  120,   0)}
+        ${tag(a.cya, 'CYA',    'ppm',   30,  75,    0)}
+        ${tag(a.th,  'TH',     'ppm',   80,  250,   0)}
+        ${tag(a.temp,'T°',     '°C',    15,  32,    0)}
+      </div>
+      ${a.conseil ? `<div style="font-size:11px;color:var(--gris-doux);margin-top:8px;line-height:1.5">${a.conseil}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Courbe par défaut sur pH
+  afficherCourbe('ph');
+}
+
+async function supprimerEtMaj(id) {
+  if (!confirm('Supprimer cette analyse ?')) return;
+  await supprimerAnalyse(id);
+  await majHistorique();
+}
+
+/* ══ COURBES SVG ══ */
+const COURBE_CONFIG = {
+  ph:  { label: 'pH',          min: 6.0, max: 9.0, cMin: 7.0, cMax: 7.4, dec: 1, couleur: '#00d4f5' },
+  cl:  { label: 'Chlore libre',min: 0,   max: 5.0, cMin: 1.0, cMax: 3.0, dec: 1, couleur: '#22c97a' },
+  tac: { label: 'TAC (ppm)',   min: 0,   max: 200, cMin: 80,  cMax: 120, dec: 0, couleur: '#f59e0b' },
+  cya: { label: 'CYA (ppm)',   min: 0,   max: 150, cMin: 30,  cMax: 75,  dec: 0, couleur: '#a78bfa' },
+};
+
+function afficherCourbe(param) {
+  // Mise à jour des onglets
+  document.querySelectorAll('.chart-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.param === param);
+  });
+
+  const analyses = state.analyses.slice().reverse(); // chronologique
+  const cfg      = COURBE_CONFIG[param];
+  const svg      = document.getElementById('courbe-svg');
+  const W = 340, H = 160, PAD = { t: 16, r: 12, b: 28, l: 36 };
+  const W2 = W - PAD.l - PAD.r;
+  const H2 = H - PAD.t - PAD.b;
+
+  if (analyses.length < 2) {
+    svg.innerHTML = `<text x="170" y="85" text-anchor="middle" fill="#8ab4c4" font-size="12">
+      ${analyses.length === 0 ? 'Aucune donnée encore' : 'Minimum 2 analyses pour afficher la courbe'}
+    </text>`;
+    return;
+  }
+
+  const points = analyses
+    .map((a, i) => ({ x: i, y: parseFloat(a[param]) }))
+    .filter(p => !isNaN(p.y));
+
+  if (points.length < 2) {
+    svg.innerHTML = `<text x="170" y="85" text-anchor="middle" fill="#8ab4c4" font-size="12">Pas assez de données ${cfg.label}</text>`;
+    return;
+  }
+
+  const xScale = i => PAD.l + (i / (analyses.length - 1)) * W2;
+  const yScale = v => PAD.t + H2 - ((v - cfg.min) / (cfg.max - cfg.min)) * H2;
+
+  // Zone cible (fond vert doux)
+  const yMin = yScale(cfg.cMax);
+  const yMax = yScale(cfg.cMin);
+  let out = `<rect x="${PAD.l}" y="${yMin}" width="${W2}" height="${yMax - yMin}" fill="rgba(34,201,122,0.08)" rx="2"/>`;
+
+  // Ligne cible min/max
+  out += `<line x1="${PAD.l}" y1="${yScale(cfg.cMin)}" x2="${W - PAD.r}" y2="${yScale(cfg.cMin)}" stroke="rgba(34,201,122,0.3)" stroke-width="1" stroke-dasharray="4,3"/>`;
+  out += `<line x1="${PAD.l}" y1="${yScale(cfg.cMax)}" x2="${W - PAD.r}" y2="${yScale(cfg.cMax)}" stroke="rgba(34,201,122,0.3)" stroke-width="1" stroke-dasharray="4,3"/>`;
+
+  // Courbe
+  const pathD = points.map((p, i) =>
+    (i === 0 ? 'M' : 'L') + xScale(p.x).toFixed(1) + ',' + yScale(p.y).toFixed(1)
+  ).join(' ');
+  out += `<path d="${pathD}" fill="none" stroke="${cfg.couleur}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+  // Points
+  points.forEach(p => {
+    const cx = xScale(p.x).toFixed(1);
+    const cy = yScale(p.y).toFixed(1);
+    const ok = p.y >= cfg.cMin && p.y <= cfg.cMax;
+    out += `<circle cx="${cx}" cy="${cy}" r="4" fill="${ok ? cfg.couleur : '#ef4444'}" stroke="${ok ? cfg.couleur : '#ef4444'}" stroke-width="1" opacity="0.9"/>`;
+  });
+
+  // Axe Y — quelques labels
+  const nLabels = 4;
+  for (let i = 0; i <= nLabels; i++) {
+    const v = cfg.min + (cfg.max - cfg.min) * (i / nLabels);
+    const y = yScale(v).toFixed(1);
+    out += `<line x1="${PAD.l - 3}" y1="${y}" x2="${PAD.l}" y2="${y}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
+    out += `<text x="${PAD.l - 5}" y="${parseFloat(y) + 4}" text-anchor="end" fill="#8ab4c4" font-size="9">${v.toFixed(cfg.dec === 1 ? 1 : 0)}</text>`;
+  }
+
+  // Axe X — dates
+  const step = Math.max(1, Math.floor(analyses.length / 4));
+  analyses.forEach((a, i) => {
+    if (i % step !== 0 && i !== analyses.length - 1) return;
+    const d  = new Date(a.date);
+    const lbl = (d.getDate()) + '/' + (d.getMonth() + 1);
+    out += `<text x="${xScale(i).toFixed(1)}" y="${H - 4}" text-anchor="middle" fill="#8ab4c4" font-size="9">${lbl}</text>`;
+  });
+
+  // Label param
+  out += `<text x="${PAD.l + 4}" y="${PAD.t - 2}" fill="${cfg.couleur}" font-size="10" font-weight="700">${cfg.label}</text>`;
+
+  svg.innerHTML = out;
+}
+
+/* ══ EXPORT EXCEL ══ */
+async function exporterExcel() {
+  const analyses = await lireAnalyses();
+  if (analyses.length === 0) {
+    alert('Aucune analyse à exporter.');
+    return;
+  }
+
+  // Génère un CSV bien formaté (compatible Excel avec ouverture directe)
+  const BOM  = '\uFEFF'; // BOM UTF-8 pour Excel
+  const SEP  = ';';
+  const entetes = ['Date', 'Heure', 'pH', 'Chlore libre (mg/L)', 'Chlore total (mg/L)',
+                   'TAC (ppm)', 'CYA (ppm)', 'TH (ppm)', 'T° eau (°C)', 'Conseil'];
+
+  const lignes = analyses.map(a => {
+    const d = new Date(a.date);
+    const date  = d.getDate() + '/' + (d.getMonth()+1) + '/' + d.getFullYear();
+    const heure = d.getHours() + 'h' + String(d.getMinutes()).padStart(2,'0');
+    return [
+      date, heure,
+      a.ph  ?? '', a.cl  ?? '', a.ct  ?? '',
+      a.tac ?? '', a.cya ?? '', a.th  ?? '', a.temp ?? '',
+      (a.conseil || '').replace(/;/g, ',')
+    ].join(SEP);
+  });
+
+  const csv     = BOM + entetes.join(SEP) + '\n' + lignes.join('\n');
+  const blob    = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  const today   = new Date();
+  a.href        = url;
+  a.download    = 'piscine_cuvier_' + today.getFullYear() + '-' +
+                  String(today.getMonth()+1).padStart(2,'0') + '-' +
+                  String(today.getDate()).padStart(2,'0') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ══ OVERRIDE majDashboard pour sauvegarder en IndexedDB ══ */
+const _majDashboardOriginal = majDashboard;
+majDashboard = async function(vals) {
+  _majDashboardOriginal(vals);
+  // Sauvegarde l'analyse
+  const conseil = document.getElementById('conseil-text')?.textContent || '';
+  try {
+    await sauvegarderAnalyse(vals, conseil);
+    // Recharge l'historique si on est dessus
+    if (document.getElementById('screen-historique').classList.contains('active')) {
+      await majHistorique();
+    }
+  } catch(e) {
+    console.warn('Sauvegarde IndexedDB:', e);
+  }
+};
+
+/* ══ OVERRIDE goTo pour charger l'historique à la demande ══ */
+const _goToOriginal = goTo;
+goTo = async function(name) {
+  _goToOriginal(name);
+  if (name === 'historique') await majHistorique();
+  if (name === 'params') chargerApiKey();
+};
+
+/* ══ INIT DB + ÉTAT FILTRE ══ */
+(async function() {
+  try {
+    await ouvrirDB();
+
+    // Charger l'état cartouche depuis IndexedDB
+    const filtreH    = await lireConfig('filtreHeures');
+    const filtreDate = await lireConfig('filtreDate');
+    if (filtreH !== null) {
+      state.filtreHeures = parseFloat(filtreH) || 0;
+      state.filtreDate   = filtreDate;
+      majJaugeFiltre();
+    }
+
+    // Vérifier si premier lancement
+    const dejaLance = await lireConfig('premierLancement');
+    if (!dejaLance) {
+      await sauvegarderConfig('premierLancement', true);
+      document.getElementById('modal-firstlaunch').classList.remove('hidden');
+    } else {
+      document.getElementById('modal-firstlaunch').classList.add('hidden');
+      // Montrer modal API key si pas configurée
+      if (!getApiKey()) {
+        setTimeout(() => document.getElementById('modal-apikey').classList.remove('hidden'), 400);
+      }
+    }
+  } catch(e) {
+    console.warn('IndexedDB non disponible, mode dégradé:', e);
+    document.getElementById('modal-firstlaunch').classList.remove('hidden');
+  }
+})();
+
+/* ══ OVERRIDE initFiltre pour persister dans IndexedDB ══ */
+const _initFiltreOriginal = initFiltre;
+initFiltre = async function(heures) {
+  state.filtreHeures = parseFloat(heures) || 0;
+  state.filtreDate   = null;
+  majJaugeFiltre();
+  document.getElementById('modal-firstlaunch').classList.add('hidden');
+  await sauvegarderConfig('filtreHeures', state.filtreHeures);
+  await sauvegarderConfig('filtreDate',   null);
+};
+
+/* ══ OVERRIDE accumulerFiltration pour persister ══ */
+const _accumulerOriginal = accumulerFiltration;
+accumulerFiltration = async function(heures) {
+  const aujourd = new Date().toDateString();
+  if (state.filtreDate === aujourd) return;
+  state.filtreDate   = aujourd;
+  state.filtreHeures = Math.min(DOSAGES.FILTRE_DUREE_VIE, state.filtreHeures + heures);
+  majJaugeFiltre();
+  await sauvegarderConfig('filtreHeures', state.filtreHeures);
+  await sauvegarderConfig('filtreDate',   state.filtreDate);
+};
+
+/* ══ NAVIGATION ══ */
+function goTo(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.querySelector('[data-screen="' + name + '"]').classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ══ DATE HEADER ══ */
+(function() {
+  const d = new Date();
+  const J = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const M = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
+  document.getElementById('header-date').textContent = J[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth()+1);
+  document.getElementById('meteo-date').textContent  = J[d.getDay()] + ' ' + d.getDate() + ' ' + M[d.getMonth()];
+})();
+
+/* ══ MÉTÉO ══ */
+async function loadMeteo() {
+  try {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=46.65&longitude=5.93' +
+      '&current=temperature_2m,relative_humidity_2m,weather_code,precipitation' +
+      '&forecast_days=1&timezone=Europe%2FParis';
+    const r = await fetch(url);
+    const d = await r.json();
+    const c = d.current;
+    const DESC = {0:'Ciel dégagé',1:'Peu nuageux',2:'Partiellement nuageux',3:'Couvert',
+      45:'Brouillard',48:'Brouillard givrant',51:'Bruine légère',53:'Bruine',55:'Bruine forte',
+      61:'Pluie légère',63:'Pluie',65:'Pluie forte',71:'Neige légère',73:'Neige',75:'Neige forte',
+      80:'Averses légères',81:'Averses',82:'Averses fortes',95:'Orage',96:'Orage + grêle',99:'Orage violent'};
+    const ICON = {0:'☀️',1:'🌤',2:'⛅',3:'☁️',45:'🌫',48:'🌫',51:'🌦',53:'🌦',55:'🌧',
+      61:'🌦',63:'🌧',65:'🌧',71:'🌨',73:'❄️',75:'❄️',80:'🌦',81:'🌧',82:'⛈',95:'⛈',96:'⛈',99:'⛈'};
+    document.getElementById('meteo-temp').textContent   = Math.round(c.temperature_2m);
+    document.getElementById('meteo-desc').textContent   = DESC[c.weather_code] || '–';
+    document.getElementById('meteo-icon').textContent   = ICON[c.weather_code] || '🌡';
+    document.getElementById('meteo-details').textContent =
+      'Humidité : ' + c.relative_humidity_2m + '% · ' +
+      (c.precipitation > 0 ? '🌧 ' + c.precipitation + ' mm' : 'Pas de pluie');
+  } catch(e) {
+    document.getElementById('meteo-desc').textContent = 'Météo indisponible';
+    document.getElementById('meteo-icon').textContent = '📡';
+  }
+}
+loadMeteo();
+
+/* ══ FILTRATION ══ */
+document.getElementById('temp-eau').addEventListener('input', function() {
+  const t = parseFloat(this.value);
+  const el = document.getElementById('filtration-value');
+  if (!isNaN(t) && t >= 10 && t <= 40) {
+    const h = Math.max(1, t / 2).toFixed(1).replace('.', ',');
+    el.textContent = h + ' h/jour';
+    // Accumule les heures si une T° est saisie (1 saisie = 1 jour de filtration)
+    accumulerFiltration(parseFloat((t / 2).toFixed(1)));
+  } else {
+    el.textContent = '-- h/jour';
+  }
+});
+
+/* ══ JAUGE CARTOUCHE ══ */
+function majJaugeFiltre() {
+  const h   = state.filtreHeures;
+  const max = DOSAGES.FILTRE_DUREE_VIE;
+  const pct = Math.min(100, Math.round((h / max) * 100));
+
+  // Couleur selon niveau
+  let couleur, statut, bgCard;
+  if (pct < 50) {
+    couleur = '#22c97a'; statut = '🟢 Cartouche OK';
+    bgCard = 'rgba(34,201,122,0.08)';
+  } else if (pct < 70) {
+    couleur = '#f59e0b'; statut = '🟡 À surveiller';
+    bgCard = 'rgba(245,158,11,0.08)';
+  } else if (pct < 90) {
+    couleur = '#f97316'; statut = '🟠 Nettoyage recommandé';
+    bgCard = 'rgba(249,115,22,0.10)';
+  } else {
+    couleur = '#ef4444'; statut = '🔴 Remplacement urgent';
+    bgCard = 'rgba(239,68,68,0.12)';
+  }
+
+  document.getElementById('filtre-bar').style.width      = pct + '%';
+  document.getElementById('filtre-bar').style.background = couleur;
+  document.getElementById('filtre-pct').textContent      = pct + '%';
+  document.getElementById('filtre-pct').style.color      = couleur;
+  document.getElementById('filtre-heures').textContent   = h.toFixed(1) + ' h / ' + max + ' h';
+  document.getElementById('filtre-statut').textContent   = statut;
+  document.getElementById('filtre-card').style.background = bgCard;
+  document.getElementById('filtre-card').style.border    = '1px solid ' + couleur + '33';
+
+  // Bandeau alerte si >= 90%
+  const alerte = document.getElementById('alerte-filtre');
+  if (pct >= 90) {
+    document.getElementById('alerte-filtre-txt').textContent =
+      pct >= 100
+        ? '🔴 Cartouche saturée — remplace-la avant de filtrer !'
+        : '🟠 Cartouche à ' + pct + '% — remplacement urgent recommandé';
+    alerte.classList.add('visible');
+  } else {
+    alerte.classList.remove('visible');
+  }
+}
+
+function accumulerFiltration(heures) {
+  const aujourd = new Date().toDateString();
+  // N'accumule qu'une fois par jour
+  if (state.filtreDate === aujourd) return;
+  state.filtreDate   = aujourd;
+  state.filtreHeures = Math.min(DOSAGES.FILTRE_DUREE_VIE, state.filtreHeures + heures);
+  majJaugeFiltre();
+}
+
+function confirmResetFiltre() {
+  if (confirm('Cartouche remplacée ? Le compteur va repartir à zéro.')) {
+    initFiltre(0);
+  }
+}
+
+function initFiltre(heures) {
+  state.filtreHeures = parseFloat(heures) || 0;
+  state.filtreDate   = null;
+  majJaugeFiltre();
+  document.getElementById('modal-firstlaunch').classList.add('hidden');
+}
+
+/* ══ MODAL PREMIER LANCEMENT ══ */
+function toggleEstimer() {
+  const row = document.getElementById('modal-hours-row');
+  const btnValider = document.getElementById('btn-valider-heures');
+  row.classList.toggle('visible');
+  btnValider.classList.toggle('hidden');
+}
+function validerHeures() {
+  const h = parseFloat(document.getElementById('modal-hours-val').value) || 0;
+  initFiltre(Math.min(h, DOSAGES.FILTRE_DUREE_VIE));
+}
+
+// Afficher le modal au premier lancement
+(function() {
+  // En tranche 4, on vérifiera IndexedDB. Pour l'instant, toujours afficher.
+  document.getElementById('modal-firstlaunch').classList.remove('hidden');
+  majJaugeFiltre();
+})();
+
+/* ══ DICTÉE ══ */
+document.getElementById('btn-mic').addEventListener('click', function() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('La dictée vocale nécessite Chrome ou le navigateur de ton Pixel.');
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recog = new SR();
+  recog.lang = 'fr-FR';
+  recog.interimResults = false;
+  this.textContent = '🔴 Écoute…';
+  const btn = this;
+  recog.onresult = e => {
+    const texte = e.results[0][0].transcript;
+    document.getElementById('natural-input').value = texte;
+    btn.textContent = '🎤 Dicter';
+    // Parse basique depuis la dictée
+    parseNaturalInput(texte);
+  };
+  recog.onerror = () => { btn.textContent = '🎤 Dicter'; };
+  recog.onend   = () => { btn.textContent = '🎤 Dicter'; };
+  recog.start();
+});
+
+/* ══ PARSE LANGAGE NATUREL (basique, sera amélioré par Claude en tranche 3) ══ */
+function parseNaturalInput(texte) {
+  const t = texte.toLowerCase().replace(',', '.');
+  const patterns = [
+    { key: 'f-ph',   regex: /ph\s*[:=]?\s*(\d+\.?\d*)/  },
+    { key: 'f-cl',   regex: /chlore\s*(libre)?\s*[:=]?\s*(\d+\.?\d*)/  },
+    { key: 'f-ct',   regex: /chlore\s*total\s*[:=]?\s*(\d+\.?\d*)/ },
+    { key: 'f-tac',  regex: /tac\s*[:=]?\s*(\d+)/ },
+    { key: 'f-cya',  regex: /(?:cya|stabilisant)\s*[:=]?\s*(\d+)/ },
+    { key: 'f-th',   regex: /(?:th|dureté)\s*[:=]?\s*(\d+)/ },
+    { key: 'f-temp', regex: /(?:t°|température|temp)\s*[:=]?\s*(\d+)/ },
+  ];
+  patterns.forEach(p => {
+    const m = t.match(p.regex);
+    if (m) {
+      const val = m[2] || m[1];
+      if (val) document.getElementById(p.key).value = parseFloat(val);
+    }
+  });
+}
+
+/* ══ CALCUL DOSAGES ══ */
+function calculerDosages() {
+  const vals = {
+    ph:   parseFloat(document.getElementById('f-ph').value),
+    cl:   parseFloat(document.getElementById('f-cl').value),
+    ct:   parseFloat(document.getElementById('f-ct').value),
+    tac:  parseFloat(document.getElementById('f-tac').value),
+    cya:  parseFloat(document.getElementById('f-cya').value),
+    th:   parseFloat(document.getElementById('f-th').value),
+    temp: parseFloat(document.getElementById('f-temp').value),
+  };
+
+  // Vérifie qu'au moins pH ou chlore est renseigné
+  if (isNaN(vals.ph) && isNaN(vals.cl) && isNaN(vals.tac)) {
+    alert('Renseigne au moins le pH, le chlore et le TAC.');
+    return;
+  }
+
+  const actions = [];
+
+  // ── RÈGLE 1 : TAC d'abord ──
+  if (!isNaN(vals.tac) && vals.tac < DOSAGES.CIBLES.tac.min) {
+    const manque = DOSAGES.CIBLES.tac.min - vals.tac;
+    const doses  = Math.ceil(manque / 10);
+    const grammes = doses * DOSAGES.BICA_PAR_10PPM;
+    actions.push({
+      produit: 'Bicarbonate La Baleine : ' + grammes + ' g',
+      desc: 'TAC ' + vals.tac + ' → ' + (vals.tac + doses * 10) + ' ppm · Attendre 2 h avant la suite',
+      urgent: true
+    });
+  } else if (!isNaN(vals.tac) && vals.tac > DOSAGES.CIBLES.tac.max) {
+    actions.push({
+      produit: 'TAC trop élevé (' + vals.tac + ' ppm)',
+      desc: 'Vidanger 15-20 % de l\'eau et recompléter à l\'eau du robinet',
+      urgent: false
+    });
+  }
+
+  // ── RÈGLE 2 : pH ──
+  if (!isNaN(vals.ph)) {
+    if (vals.ph > DOSAGES.CIBLES.ph.max) {
+      const ecart  = vals.ph - DOSAGES.CIBLES.ph.max;
+      const doses  = Math.ceil(ecart / 0.2);
+      const grammes = doses * DOSAGES.PH_MOINS_PAR_02;
+      actions.push({
+        produit: 'pH- (bisulfate) : ' + grammes + ' g',
+        desc: 'pH ' + vals.ph.toFixed(1) + ' → cible 7,2 · Retester dans 4 h',
+        urgent: vals.ph > 7.8
+      });
+    } else if (vals.ph < DOSAGES.CIBLES.ph.min) {
+      const ecart  = DOSAGES.CIBLES.ph.min - vals.ph;
+      const doses  = Math.ceil(ecart / 0.2);
+      const grammes = doses * DOSAGES.PH_PLUS_PAR_02;
+      actions.push({
+        produit: 'pH+ (carbonate) : ' + grammes + ' g',
+        desc: 'pH ' + vals.ph.toFixed(1) + ' → cible 7,2 · Retester dans 4 h',
+        urgent: vals.ph < 6.8
+      });
+    }
+  }
+
+  // ── RÈGLE 3 : Chlore ──
+  if (!isNaN(vals.cl)) {
+    if (vals.cl < DOSAGES.CIBLES.cl.min) {
+      const dose = vals.cl < 0.5 ? DOSAGES.CHOC_PLEIN : DOSAGES.CHOC_DEMI;
+      actions.push({
+        produit: 'Chlore choc : ' + dose + ' g',
+        desc: (dose === DOSAGES.CHOC_PLEIN ? 'Dose pleine' : 'Demi-dose') +
+              ' · Ce soir · Filtration 12 h · Pas de baignade 12 h',
+        urgent: vals.cl === 0
+      });
+    }
+    // Chloramines
+    if (!isNaN(vals.ct) && (vals.ct - vals.cl) > 0.5) {
+      actions.push({
+        produit: 'Chlore choc : 38 g (chloramines)',
+        desc: 'Écart chlore total - libre (' + (vals.ct - vals.cl).toFixed(1) + ' mg/L) → choc pour éliminer les chloramines',
+        urgent: false
+      });
+    }
+  }
+
+  // ── RÈGLE 4 : CYA ──
+  if (!isNaN(vals.cya)) {
+    if (vals.cya === 0) {
+      actions.push({
+        produit: 'Stabilisant (CYA) : 115 g',
+        desc: 'Dose initiale saison · Une seule fois · Via diffuseur ou chaussette',
+        urgent: true
+      });
+    } else if (vals.cya > 75) {
+      actions.push({
+        produit: '⚠️ Stabilisant trop élevé (' + vals.cya + ' ppm)',
+        desc: 'Vidanger 25-30 % de l\'eau, recompléter · Ne pas remettre de stabilisant',
+        urgent: vals.cya > 100
+      });
+    }
+  }
+
+  // ── Si tout est OK ──
+  if (actions.length === 0) {
+    actions.push({
+      produit: '✅ Eau équilibrée !',
+      desc: 'Tous les paramètres sont dans les cibles. Continue la routine normale.',
+      urgent: false
+    });
+  }
+
+  // ── Filtration ──
+  if (!isNaN(vals.temp)) {
+    const hFiltration = Math.max(1, vals.temp / 2).toFixed(1).replace('.', ',');
+    actions.push({
+      produit: '⏱ Filtration : ' + hFiltration + ' h/jour',
+      desc: 'Basé sur T° ' + vals.temp + '°C (règle T°÷2) · Plages 11h–21h',
+      urgent: false
+    });
+    // Met aussi à jour le tableau de bord
+    document.getElementById('filtration-value').textContent = hFiltration + ' h/jour';
+    document.getElementById('temp-eau').value = vals.temp;
+  }
+
+  // ── Affichage résultats ──
+  afficherResultats(vals, actions);
+}
+
+function statutClass(val, min, max) {
+  if (isNaN(val)) return '';
+  if (val >= min && val <= max) return 'status-ok';
+  if (val < min * 0.75 || val > max * 1.3) return 'status-danger';
+  return 'status-warn';
+}
+
+function afficherResultats(vals, actions) {
+  // Grille valeurs
+  const params = [
+    { label: 'pH',            val: vals.ph,   unit: '',      min: 7.0, max: 7.4, dec: 1 },
+    { label: 'Chlore libre',  val: vals.cl,   unit: 'mg/L',  min: 1.0, max: 3.0, dec: 1 },
+    { label: 'Chlore total',  val: vals.ct,   unit: 'mg/L',  min: 1.0, max: 3.5, dec: 1 },
+    { label: 'TAC',           val: vals.tac,  unit: 'ppm',   min: 80,  max: 120, dec: 0 },
+    { label: 'CYA',           val: vals.cya,  unit: 'ppm',   min: 30,  max: 75,  dec: 0 },
+    { label: 'TH',            val: vals.th,   unit: 'ppm',   min: 80,  max: 250, dec: 0 },
+  ];
+
+  let gridHTML = '';
+  params.forEach(p => {
+    const affiche  = isNaN(p.val) ? '--' : p.val.toFixed(p.dec).replace('.', ',');
+    const cls      = isNaN(p.val) ? '' : statutClass(p.val, p.min, p.max);
+    gridHTML += `<div class="param-tile">
+      <div class="param-label">${p.label}</div>
+      <div class="param-value ${cls}">${affiche} <span class="param-unit">${p.unit}</span></div>
+    </div>`;
+  });
+  document.getElementById('result-values-grid').innerHTML = gridHTML;
+
+  // Liste dosages
+  let dosHTML = '';
+  actions.forEach((a, i) => {
+    dosHTML += `<div class="dosage-item">
+      <div class="dosage-step">${i + 1}</div>
+      <div>
+        <div class="dosage-produit">${a.produit}</div>
+        <div class="dosage-desc">${a.desc}</div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('dosages-list').innerHTML = dosHTML;
+
+  // Conseil synthétique
+  const tacBas  = !isNaN(vals.tac) && vals.tac < 80;
+  const phHaut  = !isNaN(vals.ph)  && vals.ph > 7.4;
+  const clBas   = !isNaN(vals.cl)  && vals.cl < 1.0;
+  let conseil = '';
+  if (tacBas && phHaut && clBas) {
+    conseil = '⚠️ Triple action nécessaire : commence par le TAC (bicarbonate), attends 2 h, puis corrige le pH, puis le chlore. Respecte cet ordre — c\'est obligatoire.';
+  } else if (tacBas && clBas) {
+    conseil = '⚠️ Commence par le bicarbonate pour remonter le TAC. Le pH instable vient souvent d\'un TAC trop bas. Une fois le TAC corrigé, fais le choc chlore ce soir.';
+  } else if (tacBas) {
+    conseil = 'Ton TAC est bas. Le bicarbonate La Baleine va stabiliser l\'eau et empêcher le pH de bouger tout seul. Donne 4-6 h avant de retester.';
+  } else if (phHaut && clBas) {
+    conseil = 'pH haut et chlore bas : ajoute le pH- d\'abord, attends 4 h, puis fais le choc chlore ce soir. À pH élevé le chlore agit très mal.';
+  } else if (clBas) {
+    conseil = 'Chlore insuffisant. Fais le choc ce soir après 21 h. Laisse la filtration tourner toute la nuit. Reteste demain matin.';
+  } else if (phHaut) {
+    conseil = 'pH un peu haut. Ajoute le pH-, laisse tourner la pompe 4 h et reteste avant de te baigner.';
+  } else {
+    conseil = '✅ Tout est équilibré ! Continue ta routine : galet lundi, anti-algues lundi, test jeudi.';
+  }
+
+  if (conseil) {
+    document.getElementById('conseil-text').textContent = conseil;
+    document.getElementById('result-conseil-card').style.display = 'block';
+  }
+
+  // Affiche le bloc résultat
+  const card = document.getElementById('result-card');
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Met à jour le tableau de bord
+  majDashboard(vals);
+}
+
+/* ══ MAJ DASHBOARD ══ */
+function majDashboard(vals) {
+  function setTile(id, val, unit, min, max, dec) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (isNaN(val)) return;
+    const cls = statutClass(val, min, max);
+    el.className = 'param-value ' + cls;
+    el.innerHTML = val.toFixed(dec).replace('.', ',') + (unit ? ' <span class="param-unit">' + unit + '</span>' : '');
+  }
+  setTile('dash-ph',  vals.ph,  '',      7.0, 7.4,  1);
+  setTile('dash-cl',  vals.cl,  'mg/L',  1.0, 3.0,  1);
+  setTile('dash-tac', vals.tac, 'ppm',   80,  120,   0);
+  setTile('dash-cya', vals.cya, 'ppm',   30,  75,    0);
+  setTile('dash-th',  vals.th,  'ppm',   80,  250,   0);
+  setTile('dash-ct',  vals.ct,  'mg/L',  1.0, 3.5,  1);
+
+  const now = new Date();
+  const heure = now.getHours() + 'h' + String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('last-test-age').textContent =
+    'Aujourd\'hui à ' + heure;
+}
+
+/* ══ INIT ══ */
+majJaugeFiltre();
+chargerApiKey();
+
+/* ══════════════════════════════════════════
+   TRANCHE 3 — CLAUDE IA
+══════════════════════════════════════════ */
+
+/* ── Gestion clé API ── */
+function chargerApiKey() {
+  const key = localStorage.getItem('piscine_apikey') || '';
+  const el  = document.getElementById('apikey-status');
+  const filEl = document.getElementById('params-filtre-heures');
+  if (el) el.textContent = key ? '✅ Configurée (sk-ant-…' + key.slice(-4) + ')' : '❌ Non configurée';
+  if (filEl) filEl.textContent = (state.filtreHeures || 0).toFixed(1) + ' h';
+}
+
+function demanderApiKey() {
+  const modal = document.getElementById('modal-apikey');
+  const input = document.getElementById('apikey-input');
+  const stored = localStorage.getItem('piscine_apikey') || '';
+  input.value = stored;
+  modal.classList.remove('hidden');
+  setTimeout(() => input.focus(), 300);
+}
+
+function sauvegarderApiKey() {
+  const key = document.getElementById('apikey-input').value.trim();
+  if (!key.startsWith('sk-ant-')) {
+    alert('La clé doit commencer par sk-ant-\nVérifie sur console.anthropic.com');
+    return;
+  }
+  localStorage.setItem('piscine_apikey', key);
+  document.getElementById('modal-apikey').classList.add('hidden');
+  chargerApiKey();
+  alert('✅ Clé API enregistrée ! L\'analyse photo et la dictée intelligente sont maintenant actives.');
+}
+
+function getApiKey() {
+  return localStorage.getItem('piscine_apikey') || '';
+}
+
+/* ── Loader ── */
+function showLoader(txt) {
+  const l = document.getElementById('ia-loader');
+  document.getElementById('ia-loader-txt').textContent = txt || 'Claude réfléchit…';
+  l.classList.add('visible');
+}
+function hideLoader() {
+  document.getElementById('ia-loader').classList.remove('visible');
+}
+
+/* ── Appel API Claude ── */
+async function appelClaude(messages, maxTokens) {
+  const key = getApiKey();
+  if (!key) throw new Error('NO_KEY');
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens || 1000,
+      messages
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Erreur API ' + resp.status);
+  }
+  const data = await resp.json();
+  return data.content[0].text;
+}
+
+/* ── ANALYSE PHOTO BANDELETTE ── */
+document.getElementById('photo-input').addEventListener('change', async function() {
+  const file = this.files[0];
+  if (!file) return;
+
+  // Affiche la preview
+  const preview = document.getElementById('photo-preview');
+  const reader  = new FileReader();
+  reader.onload = e => {
+    preview.src = e.target.result;
+    preview.classList.add('visible');
+  };
+  reader.readAsDataURL(file);
+
+  const key = getApiKey();
+  if (!key) {
+    alert('Configure ta clé API dans Réglages pour utiliser l\'analyse photo.\nTu peux aussi saisir les valeurs manuellement.');
+    return;
+  }
+
+  // Convertit en base64
+  const b64 = await new Promise((res, rej) => {
+    const r2 = new FileReader();
+    r2.onload  = e => res(e.target.result.split(',')[1]);
+    r2.onerror = rej;
+    r2.readAsDataURL(file);
+  });
+
+  showLoader('Claude lit ta bandelette 7-en-1…');
+  document.getElementById('result-card').style.display = 'none';
+
+  try {
+    const prompt = `Tu es un expert en analyse de bandelettes de test pour piscine.
+Cette photo montre une bandelette de test 7-en-1 PoolSan (ou similaire).
+
+L'ordre des cases de la poignée vers l'extrémité est :
+1. TH (Total Hardness / Dureté) — échelle : 0 / 100 / 250 / 500 / 1000 ppm
+2. Chlore libre (Free Chlorine) — échelle : 0 / 0,5 / 1 / 3 / 5 / 10 mg/L
+3. Brome (ignorer — traitement au chlore)
+4. Chlore total (Total Chlorine) — échelle : 0 / 0,5 / 1 / 3 / 5 / 10 mg/L
+5. CYA / Stabilisant (Cyanuric Acid) — échelle : 0 / 30 / 50 / 100 / 150 / 240 ppm
+6. TAC (Total Alkalinity) — échelle : 0 / 40 / 80 / 120 / 180 / 240 ppm
+7. pH — échelle : 6,2 / 6,8 / 7,2 / 7,8 / 8,4 / 8,8
+
+Analyse chaque case en comparant la couleur à l'échelle fournie.
+Réponds UNIQUEMENT avec un JSON valide, sans texte avant ni après, sans balises markdown :
+{"ph":7.2,"cl":1.5,"ct":2.0,"tac":80,"cya":45,"th":100}
+
+Utilise null pour une case illisible. Utilise les valeurs numériques de l'échelle les plus proches.`;
+
+    const reponse = await appelClaude([{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } },
+        { type: 'text',  text: prompt }
+      ]
+    }], 300);
+
+    // Parse JSON
+    const clean = reponse.replace(/```json|```/g, '').trim();
+    const vals  = JSON.parse(clean);
+
+    // Remplir les champs
+    if (vals.ph  != null) document.getElementById('f-ph').value  = vals.ph;
+    if (vals.cl  != null) document.getElementById('f-cl').value  = vals.cl;
+    if (vals.ct  != null) document.getElementById('f-ct').value  = vals.ct;
+    if (vals.tac != null) document.getElementById('f-tac').value = vals.tac;
+    if (vals.cya != null) document.getElementById('f-cya').value = vals.cya;
+    if (vals.th  != null) document.getElementById('f-th').value  = vals.th;
+
+    hideLoader();
+
+    // Lance le conseil IA puis calcule les dosages
+    await conseilIA(vals);
+    calculerDosages();
+
+  } catch(e) {
+    hideLoader();
+    if (e.message === 'NO_KEY') {
+      alert('Configure ta clé API dans Réglages.');
+    } else {
+      alert('Erreur lecture bandelette : ' + e.message + '\nTu peux saisir les valeurs manuellement.');
+    }
+  }
+});
+
+/* ── EXTRACTION TEXTE INTELLIGENT (dictée / saisie naturelle) ── */
+async function extraireParIA(texte) {
+  showLoader('Claude extrait les valeurs…');
+  try {
+    const prompt = `Extrait les valeurs de paramètres piscine de ce texte en français.
+Texte : "${texte}"
+
+Réponds UNIQUEMENT avec un JSON valide sans texte avant ni après :
+{"ph":null,"cl":null,"ct":null,"tac":null,"cya":null,"th":null,"temp":null}
+
+Remplace null par la valeur numérique si elle est mentionnée.
+pH entre 6 et 9. Chlore entre 0 et 10 mg/L. TAC entre 0 et 300 ppm. CYA entre 0 et 300 ppm. TH entre 0 et 1000 ppm. Temp entre 10 et 40.`;
+
+    const reponse = await appelClaude([{ role: 'user', content: prompt }], 200);
+    const clean   = reponse.replace(/```json|```/g, '').trim();
+    const vals    = JSON.parse(clean);
+    hideLoader();
+    return vals;
+  } catch(e) {
+    hideLoader();
+    return null;
+  }
+}
+
+/* ── CONSEIL RÉDIGÉ PAR CLAUDE ── */
+async function conseilIA(vals) {
+  const key = getApiKey();
+  if (!key) return; // Pas de clé → conseil statique (déjà géré dans afficherResultats)
+
+  showLoader('Claude rédige ton conseil personnalisé…');
+  try {
+    const valsTxt = Object.entries(vals)
+      .filter(([,v]) => v != null)
+      .map(([k,v]) => `${k.toUpperCase()} = ${v}`)
+      .join(', ');
+
+    const prompt = `Tu es un expert piscine. Voici les valeurs d'une piscine Intex 28272NP de 3 834 L à Cuvier (Jura) :
+${valsTxt}
+
+Cibles : pH 7,0-7,4 · Chlore libre 1-3 mg/L · TAC 80-120 ppm · CYA 30-75 ppm · TH ~100 ppm OK.
+Règle d'or : corriger d'abord le TAC, puis le pH, puis le chlore. Espacer chaque ajout de 2 h minimum.
+
+Rédige un conseil personnalisé court (3-5 phrases max), direct, en tutoiement, en français.
+Indique l'ordre des actions à faire et pourquoi. Mentionne uniquement les paramètres hors cible.
+Si tout est OK, dis-le clairement et encourage.`;
+
+    const conseil = await appelClaude([{ role: 'user', content: prompt }], 400);
+    hideLoader();
+
+    // Injecte le conseil IA (remplace le conseil statique)
+    document.getElementById('conseil-text').textContent = conseil;
+    document.getElementById('result-conseil-card').style.display = 'block';
+
+  } catch(e) {
+    hideLoader();
+    // Le conseil statique de calculerDosages() prend le relais silencieusement
+  }
+}
+
+/* ── OVERRIDE calculerDosages pour brancher IA sur dictée ── */
+const _calculerDosagesOriginal = calculerDosages;
+
+// Surcharge : si texte naturel renseigné ET clé API → extraction IA d'abord
+document.getElementById('f-ph').addEventListener('focus', () => {
+  // Quand l'utilisateur clique sur un champ manuel, vide le textarea naturel
+  // pour éviter la confusion entre les deux modes
+});
+
+// Bouton Analyser avec extraction IA si textarea rempli
+document.querySelector('button[onclick="calculerDosages()"]').onclick = async function() {
+  const texte = document.getElementById('natural-input').value.trim();
+  const key   = getApiKey();
+
+  if (texte && key) {
+    // Mode dictée intelligente
+    const vals = await extraireParIA(texte);
+    if (vals) {
+      if (vals.ph   != null) document.getElementById('f-ph').value   = vals.ph;
+      if (vals.cl   != null) document.getElementById('f-cl').value   = vals.cl;
+      if (vals.ct   != null) document.getElementById('f-ct').value   = vals.ct;
+      if (vals.tac  != null) document.getElementById('f-tac').value  = vals.tac;
+      if (vals.cya  != null) document.getElementById('f-cya').value  = vals.cya;
+      if (vals.th   != null) document.getElementById('f-th').value   = vals.th;
+      if (vals.temp != null) document.getElementById('f-temp').value = vals.temp;
+    }
+    // Calcule les dosages (synchrone, en dur)
+    calculerDosages();
+    // Ensuite lance le conseil IA en arrière-plan
+    const valsFinales = {
+      ph: parseFloat(document.getElementById('f-ph').value),
+      cl: parseFloat(document.getElementById('f-cl').value),
+      ct: parseFloat(document.getElementById('f-ct').value),
+      tac: parseFloat(document.getElementById('f-tac').value),
+      cya: parseFloat(document.getElementById('f-cya').value),
+      th: parseFloat(document.getElementById('f-th').value),
+    };
+    await conseilIA(valsFinales);
+  } else {
+    // Mode saisie manuelle classique
+    calculerDosages();
+    // Conseil IA si clé disponible
+    if (key) {
+      const valsFinales = {
+        ph: parseFloat(document.getElementById('f-ph').value),
+        cl: parseFloat(document.getElementById('f-cl').value),
+        ct: parseFloat(document.getElementById('f-ct').value),
+        tac: parseFloat(document.getElementById('f-tac').value),
+        cya: parseFloat(document.getElementById('f-cya').value),
+        th: parseFloat(document.getElementById('f-th').value),
+      };
+      await conseilIA(valsFinales);
+    }
+  }
+};
+
+/* ── Demander la clé API si pas encore configurée (géré par init DB) ── */
+</script>
+</body>
+</html>
