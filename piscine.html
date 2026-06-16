@@ -729,6 +729,7 @@
     <button class="btn-secondary" onclick="exporterExcel()">
       📊 Exporter en Excel (.xlsx)
     </button>
+    <div id="compteur-analyses" style="text-align:center;font-size:12px;color:var(--gris-doux);margin-bottom:8px"></div>
 
     <p class="section-title">📋 Analyses enregistrées</p>
     <div id="history-list">
@@ -878,13 +879,44 @@ let state = {
 };
 
 /* ══════════════════════════════════════════
-   TRANCHE 4 — INDEXEDDB + HISTORIQUE + COURBES
+   STOCKAGE — Double mécanisme IndexedDB + localStorage
+   Si IndexedDB flanche, localStorage prend le relais
 ══════════════════════════════════════════ */
 
 const DB_NAME    = 'PiscineCuvier';
 const DB_VERSION = 1;
 let db = null;
+let storageMode = 'localStorage'; // sera mis à 'indexedDB' si disponible
 
+/* ── Clés localStorage ── */
+const LS_ANALYSES   = 'piscine_analyses';
+const LS_CONFIG     = 'piscine_config';
+const LS_APIKEY     = 'piscine_apikey';
+
+/* ── localStorage helpers ── */
+function lsGetAnalyses() {
+  try { return JSON.parse(localStorage.getItem(LS_ANALYSES) || '[]'); }
+  catch(e) { return []; }
+}
+function lsSetAnalyses(arr) {
+  try { localStorage.setItem(LS_ANALYSES, JSON.stringify(arr)); } catch(e) {}
+}
+function lsGetConfig() {
+  try { return JSON.parse(localStorage.getItem(LS_CONFIG) || '{}'); }
+  catch(e) { return {}; }
+}
+function lsSetConfig(key, value) {
+  try {
+    const cfg = lsGetConfig();
+    cfg[key] = value;
+    localStorage.setItem(LS_CONFIG, JSON.stringify(cfg));
+  } catch(e) {}
+}
+function lsGetConfigKey(key) {
+  return lsGetConfig()[key] ?? null;
+}
+
+/* ── IndexedDB ── */
 async function ouvrirDB() {
   return new Promise((res, rej) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -903,64 +935,126 @@ async function ouvrirDB() {
   });
 }
 
+/* ── API unifiée stockage ── */
 async function sauvegarderConfig(key, value) {
-  if (!db) return;
-  return new Promise((res, rej) => {
-    const tx = db.transaction('config', 'readwrite');
-    tx.objectStore('config').put({ key, value });
-    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
-  });
+  // Toujours sauvegarder dans localStorage (fiable)
+  lsSetConfig(key, value);
+  // Et dans IndexedDB si disponible
+  if (db) {
+    try {
+      await new Promise((res, rej) => {
+        const tx = db.transaction('config', 'readwrite');
+        tx.objectStore('config').put({ key, value });
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+    } catch(e) {}
+  }
 }
 
 async function lireConfig(key) {
-  if (!db) return null;
-  return new Promise((res, rej) => {
-    const tx  = db.transaction('config', 'readonly');
-    const req = tx.objectStore('config').get(key);
-    req.onsuccess = e => res(e.target.result?.value ?? null);
-    req.onerror   = e => rej(e.target.error);
-  });
+  // Essaie IndexedDB d'abord
+  if (db) {
+    try {
+      const val = await new Promise((res, rej) => {
+        const tx  = db.transaction('config', 'readonly');
+        const req = tx.objectStore('config').get(key);
+        req.onsuccess = e => res(e.target.result?.value ?? null);
+        req.onerror   = e => rej(e.target.error);
+      });
+      if (val !== null) return val;
+    } catch(e) {}
+  }
+  // Fallback localStorage
+  return lsGetConfigKey(key);
 }
 
 async function sauvegarderAnalyse(vals, conseil) {
-  if (!db) return;
   const analyse = {
+    id:      Date.now(), // ID unique basé sur timestamp
     date:    new Date().toISOString(),
-    ph:      vals.ph   || null,
-    cl:      vals.cl   || null,
-    ct:      vals.ct   || null,
-    tac:     vals.tac  || null,
-    cya:     vals.cya  || null,
-    th:      vals.th   || null,
-    temp:    vals.temp || null,
+    ph:      vals.ph   ?? null,
+    cl:      vals.cl   ?? null,
+    ct:      vals.ct   ?? null,
+    tac:     vals.tac  ?? null,
+    cya:     vals.cya  ?? null,
+    th:      vals.th   ?? null,
+    temp:    vals.temp ?? null,
     conseil: conseil   || ''
   };
-  return new Promise((res, rej) => {
-    const tx  = db.transaction('analyses', 'readwrite');
-    const req = tx.objectStore('analyses').add(analyse);
-    req.onsuccess = e => { analyse.id = e.target.result; res(analyse); };
-    req.onerror   = e => rej(e.target.error);
-  });
+
+  // localStorage — toujours
+  const arr = lsGetAnalyses();
+  arr.push(analyse);
+  lsSetAnalyses(arr);
+
+  // IndexedDB — si disponible
+  if (db) {
+    try {
+      await new Promise((res, rej) => {
+        const tx  = db.transaction('analyses', 'readwrite');
+        // Utilise add sans keyPath auto pour garder notre id timestamp
+        const req = tx.objectStore('analyses').put(analyse);
+        req.onsuccess = res; req.onerror = e => rej(e.target.error);
+      });
+    } catch(e) {}
+  }
+
+  majCompteurAnalyses();
+  return analyse;
 }
 
 async function lireAnalyses() {
-  if (!db) return [];
-  return new Promise((res, rej) => {
-    const tx  = db.transaction('analyses', 'readonly');
-    const req = tx.objectStore('analyses').index('date').getAll();
-    req.onsuccess = e => res(e.target.result.reverse()); // plus récent en premier
-    req.onerror   = e => rej(e.target.error);
-  });
+  let analyses = [];
+
+  // Essaie IndexedDB d'abord
+  if (db) {
+    try {
+      analyses = await new Promise((res, rej) => {
+        const tx  = db.transaction('analyses', 'readonly');
+        const req = tx.objectStore('analyses').index('date').getAll();
+        req.onsuccess = e => res(e.target.result || []);
+        req.onerror   = e => rej(e.target.error);
+      });
+    } catch(e) { analyses = []; }
+  }
+
+  // Si IndexedDB vide ou indispo → localStorage
+  if (analyses.length === 0) {
+    analyses = lsGetAnalyses();
+  }
+
+  // Sync : si localStorage a plus de données, on les remonte
+  const lsAnalyses = lsGetAnalyses();
+  if (lsAnalyses.length > analyses.length) {
+    analyses = lsAnalyses;
+  }
+
+  return analyses.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
 async function supprimerAnalyse(id) {
-  if (!db) return;
-  return new Promise((res, rej) => {
-    const tx = db.transaction('analyses', 'readwrite');
-    tx.objectStore('analyses').delete(id);
-    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
-  });
+  // localStorage
+  const arr = lsGetAnalyses().filter(a => a.id !== id);
+  lsSetAnalyses(arr);
+
+  // IndexedDB
+  if (db) {
+    try {
+      await new Promise((res, rej) => {
+        const tx = db.transaction('analyses', 'readwrite');
+        tx.objectStore('analyses').delete(id);
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+    } catch(e) {}
+  }
 }
+
+function majCompteurAnalyses() {
+  const n = lsGetAnalyses().length;
+  const el = document.getElementById('compteur-analyses');
+  if (el) el.textContent = n + ' analyse' + (n > 1 ? 's' : '') + ' sauvegardée' + (n > 1 ? 's' : '');
+}
+
 
 /* ══ AFFICHAGE HISTORIQUE ══ */
 async function majHistorique() {
@@ -1174,45 +1268,44 @@ goTo = async function(name) {
 
 /* ══ INIT DB + ÉTAT FILTRE ══ */
 (async function() {
-  try {
-    await ouvrirDB();
+  // Essaie d'ouvrir IndexedDB (bonus, pas critique)
+  try { await ouvrirDB(); } catch(e) { console.warn('IndexedDB indisponible, mode localStorage'); }
 
-    // Charger l'état cartouche depuis IndexedDB
-    const filtreH    = await lireConfig('filtreHeures');
-    const filtreDate = await lireConfig('filtreDate');
-    if (filtreH !== null) {
-      state.filtreHeures = parseFloat(filtreH) || 0;
-      state.filtreDate   = filtreDate;
-      majJaugeFiltre();
-    }
-
-    // Vérifier si premier lancement
-    const dejaLance = await lireConfig('premierLancement');
-    if (!dejaLance) {
-      await sauvegarderConfig('premierLancement', true);
-      document.getElementById('modal-firstlaunch').classList.remove('hidden');
-    } else {
-      document.getElementById('modal-firstlaunch').classList.add('hidden');
-      // Montrer modal API key si pas configurée
-      if (!getApiKey()) {
-        setTimeout(() => document.getElementById('modal-apikey').classList.remove('hidden'), 400);
-      }
-    }
-  } catch(e) {
-    console.warn('IndexedDB non disponible, mode dégradé:', e);
-    document.getElementById('modal-firstlaunch').classList.remove('hidden');
+  // Charger l'état cartouche — localStorage d'abord (toujours fiable)
+  const filtreH    = lsGetConfigKey('filtreHeures') ?? await lireConfig('filtreHeures');
+  const filtreDate = lsGetConfigKey('filtreDate')   ?? await lireConfig('filtreDate');
+  if (filtreH !== null) {
+    state.filtreHeures = parseFloat(filtreH) || 0;
+    state.filtreDate   = filtreDate;
+    majJaugeFiltre();
   }
+
+  // Vérifier si premier lancement
+  const dejaLance = lsGetConfigKey('premierLancement');
+  if (!dejaLance) {
+    lsSetConfig('premierLancement', true);
+    document.getElementById('modal-firstlaunch').classList.remove('hidden');
+  } else {
+    document.getElementById('modal-firstlaunch').classList.add('hidden');
+    if (!getApiKey()) {
+      setTimeout(() => document.getElementById('modal-apikey').classList.remove('hidden'), 400);
+    }
+  }
+
+  // Maj compteur
+  majCompteurAnalyses();
 })();
 
-/* ══ OVERRIDE initFiltre pour persister dans IndexedDB ══ */
+/* ══ OVERRIDE initFiltre pour persister ══ */
 const _initFiltreOriginal = initFiltre;
 initFiltre = async function(heures) {
   state.filtreHeures = parseFloat(heures) || 0;
   state.filtreDate   = null;
   majJaugeFiltre();
   document.getElementById('modal-firstlaunch').classList.add('hidden');
+  lsSetConfig('filtreHeures', state.filtreHeures);
+  lsSetConfig('filtreDate',   null);
   await sauvegarderConfig('filtreHeures', state.filtreHeures);
-  await sauvegarderConfig('filtreDate',   null);
 };
 
 /* ══ OVERRIDE accumulerFiltration pour persister ══ */
@@ -1223,6 +1316,8 @@ accumulerFiltration = async function(heures) {
   state.filtreDate   = aujourd;
   state.filtreHeures = Math.min(DOSAGES.FILTRE_DUREE_VIE, state.filtreHeures + heures);
   majJaugeFiltre();
+  lsSetConfig('filtreHeures', state.filtreHeures);
+  lsSetConfig('filtreDate',   state.filtreDate);
   await sauvegarderConfig('filtreHeures', state.filtreHeures);
   await sauvegarderConfig('filtreDate',   state.filtreDate);
 };
