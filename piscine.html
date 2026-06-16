@@ -795,6 +795,15 @@
       Une fois installée, l'appli fonctionne comme une vraie appli Android — données persistantes, pas de barre Chrome, fonctionne hors-ligne.
     </div>
 
+    <p class="section-title">🔔 Notifications</p>
+    <div class="param-row">
+      <div class="param-row-label">Rappels test eau (lun/jeu) + choc mensuel</div>
+      <div class="param-row-val">
+        <span id="notif-status">--</span>
+        <button class="btn-small" onclick="activerNotifications()">Activer</button>
+      </div>
+    </div>
+
     <p class="section-title">🔑 Connexion IA</p>
     <div class="param-row">
       <div class="param-row-label">Clé API Anthropic</div>
@@ -821,7 +830,7 @@
     <p class="section-title">ℹ️ Appli</p>
     <div class="param-row">
       <div class="param-row-label">Version</div>
-      <div class="param-row-val"><span>Tranche 4 · Juin 2026</span></div>
+      <div class="param-row-val"><span>Tranche 5 · Juin 2026 · PWA</span></div>
     </div>
     <div class="param-row">
       <div class="param-row-label">Volume piscine</div>
@@ -980,7 +989,7 @@ async function lireConfig(key) {
 
 async function sauvegarderAnalyse(vals, conseil) {
   const analyse = {
-    id:      Date.now(), // ID unique basé sur timestamp
+    id:      Date.now(),
     date:    new Date().toISOString(),
     ph:      vals.ph   ?? null,
     cl:      vals.cl   ?? null,
@@ -992,21 +1001,17 @@ async function sauvegarderAnalyse(vals, conseil) {
     conseil: conseil   || ''
   };
 
-  // localStorage — toujours
-  const arr = lsGetAnalyses();
-  arr.push(analyse);
-  lsSetAnalyses(arr);
-
-  // IndexedDB — si disponible
-  if (db) {
-    try {
-      await new Promise((res, rej) => {
-        const tx  = db.transaction('analyses', 'readwrite');
-        // Utilise add sans keyPath auto pour garder notre id timestamp
-        const req = tx.objectStore('analyses').put(analyse);
-        req.onsuccess = res; req.onerror = e => rej(e.target.error);
-      });
-    } catch(e) {}
+  // localStorage UNIQUEMENT — synchrone et immédiat
+  try {
+    const arr = lsGetAnalyses();
+    arr.push(analyse);
+    const json = JSON.stringify(arr);
+    localStorage.setItem(LS_ANALYSES, json);
+    // Vérification immédiate que ça a bien été écrit
+    const verify = localStorage.getItem(LS_ANALYSES);
+    if (!verify) throw new Error('localStorage write failed');
+  } catch(e) {
+    console.error('Erreur sauvegarde localStorage:', e);
   }
 
   majCompteurAnalyses();
@@ -1014,31 +1019,8 @@ async function sauvegarderAnalyse(vals, conseil) {
 }
 
 async function lireAnalyses() {
-  let analyses = [];
-
-  // Essaie IndexedDB d'abord
-  if (db) {
-    try {
-      analyses = await new Promise((res, rej) => {
-        const tx  = db.transaction('analyses', 'readonly');
-        const req = tx.objectStore('analyses').index('date').getAll();
-        req.onsuccess = e => res(e.target.result || []);
-        req.onerror   = e => rej(e.target.error);
-      });
-    } catch(e) { analyses = []; }
-  }
-
-  // Si IndexedDB vide ou indispo → localStorage
-  if (analyses.length === 0) {
-    analyses = lsGetAnalyses();
-  }
-
-  // Sync : si localStorage a plus de données, on les remonte
-  const lsAnalyses = lsGetAnalyses();
-  if (lsAnalyses.length > analyses.length) {
-    analyses = lsAnalyses;
-  }
-
+  // localStorage uniquement — fiable et synchrone
+  const analyses = lsGetAnalyses();
   return analyses.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
@@ -1304,7 +1286,114 @@ goTo = async function(name) {
 
   // Maj compteur
   majCompteurAnalyses();
+
+  // Recharger les tuiles depuis la dernière analyse
+  const analyses = await lireAnalyses();
+  if (analyses.length > 0) {
+    const derniere = analyses[0]; // plus récente en premier
+    rechargerTuilesDashboard(derniere);
+  }
+
+  // Demander permission notifications
+  demanderNotifications();
 })();
+
+/* ══ RECHARGER TUILES DASHBOARD AU DÉMARRAGE ══ */
+function rechargerTuilesDashboard(a) {
+  function setTile(id, val, unit, min, max, dec) {
+    const el = document.getElementById(id);
+    if (!el || val == null || isNaN(parseFloat(val))) return;
+    const v   = parseFloat(val);
+    const cls = v >= min && v <= max ? 'status-ok' :
+                (v < min * 0.75 || v > max * 1.3) ? 'status-danger' : 'status-warn';
+    el.className = 'param-value ' + cls;
+    el.innerHTML = v.toFixed(dec).replace('.', ',') + (unit ? ' <span class="param-unit">' + unit + '</span>' : '');
+  }
+  setTile('dash-ph',  a.ph,  '',      7.0, 7.4,  1);
+  setTile('dash-cl',  a.cl,  'mg/L',  1.0, 3.0,  1);
+  setTile('dash-tac', a.tac, 'ppm',   80,  120,   0);
+  setTile('dash-cya', a.cya, 'ppm',   30,  75,    0);
+  setTile('dash-th',  a.th,  'ppm',   80,  250,   0);
+  setTile('dash-ct',  a.ct,  'mg/L',  1.0, 3.5,  1);
+
+  const d     = new Date(a.date);
+  const J     = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const M     = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
+  const label = J[d.getDay()] + ' ' + d.getDate() + ' ' + M[d.getMonth()] + ' à ' +
+                d.getHours() + 'h' + String(d.getMinutes()).padStart(2,'0');
+  document.getElementById('last-test-age').textContent = label;
+}
+
+/* ══ NOTIFICATIONS ══ */
+function demanderNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    // Ne demande pas tout de suite — on attend que l'utilisateur soit dans Réglages
+  }
+  planifierNotifications();
+}
+
+async function activerNotifications() {
+  if (!('Notification' in window)) {
+    alert('Les notifications ne sont pas supportées sur ce navigateur.');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    planifierNotifications();
+    alert('✅ Notifications activées !\nTu recevras des rappels lundi/jeudi pour les tests et une fois par mois pour le choc chlore.');
+  } else {
+    alert('Notifications refusées. Tu peux les réactiver dans les réglages de Chrome.');
+  }
+}
+
+function planifierNotifications() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  // Vérifie chaque jour au chargement de l'appli
+  const now   = new Date();
+  const jour  = now.getDay(); // 0=Dim, 1=Lun, ..., 4=Jeu
+  const heure = now.getHours();
+
+  // Rappel test eau — lundi (1) et jeudi (4), entre 8h et 20h
+  if ((jour === 1 || jour === 4) && heure >= 8 && heure <= 20) {
+    const dernierRappel = lsGetConfigKey('dernierRappelTest');
+    const aujourd       = now.toDateString();
+    if (dernierRappel !== aujourd) {
+      lsSetConfig('dernierRappelTest', aujourd);
+      setTimeout(() => {
+        new Notification('🏊 Piscine Cuvier', {
+          body: 'C\'est le jour du test ! Pense à tester pH + chlore avec ta bandelette.',
+          icon: './piscine.html'
+        });
+      }, 3000);
+    }
+  }
+
+  // Rappel choc chlore mensuel — vérifie si > 28 jours depuis dernier choc
+  const dernierChoc = lsGetConfigKey('dernierChoc');
+  if (dernierChoc) {
+    const joursDepuis = Math.floor((now - new Date(dernierChoc)) / (1000 * 60 * 60 * 24));
+    if (joursDepuis >= 28 && heure >= 8 && heure <= 20) {
+      const dernierRappelChoc = lsGetConfigKey('dernierRappelChoc');
+      const aujourd           = now.toDateString();
+      if (dernierRappelChoc !== aujourd) {
+        lsSetConfig('dernierRappelChoc', aujourd);
+        setTimeout(() => {
+          new Notification('⚗️ Piscine Cuvier — Choc mensuel', {
+            body: 'Plus de 28 jours sans choc chlore. Pense à faire ton traitement ce soir (38 g).',
+            icon: './piscine.html'
+          });
+        }, 5000);
+      }
+    }
+  }
+}
+
+// Enregistre la date du dernier choc quand un choc est prescrit
+function signalerChocFait() {
+  lsSetConfig('dernierChoc', new Date().toISOString());
+}
 
 /* ══ OVERRIDE initFiltre pour persister ══ */
 const _initFiltreOriginal = initFiltre;
@@ -1768,8 +1857,15 @@ function chargerApiKey() {
   const key = localStorage.getItem('piscine_apikey') || '';
   const el  = document.getElementById('apikey-status');
   const filEl = document.getElementById('params-filtre-heures');
+  const notifEl = document.getElementById('notif-status');
   if (el) el.textContent = key ? '✅ Configurée (sk-ant-…' + key.slice(-4) + ')' : '❌ Non configurée';
   if (filEl) filEl.textContent = (state.filtreHeures || 0).toFixed(1) + ' h';
+  if (notifEl) {
+    if (!('Notification' in window)) notifEl.textContent = 'Non supporté';
+    else if (Notification.permission === 'granted') notifEl.textContent = '✅ Activées';
+    else if (Notification.permission === 'denied')  notifEl.textContent = '❌ Bloquées';
+    else notifEl.textContent = '⏳ Non activées';
+  }
 }
 
 function demanderApiKey() {
