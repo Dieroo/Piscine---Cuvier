@@ -499,6 +499,34 @@
     .history-tag-warn   { background: rgba(245,158,11,0.15);  color: var(--orange-alrt); }
     .history-tag-danger { background: rgba(239,68,68,0.15);   color: var(--rouge-alrt); }
     .history-tag-neu    { background: rgba(255,255,255,0.08); color: var(--gris-doux); }
+
+    /* ── TRANCHE 6 — POMPE & FILTRATION ── */
+    .tranche-grid {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .tranche-time {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--blanc); font-size: 16px; font-weight: 600;
+      padding: 8px 10px; text-align: center; width: 100%;
+      -webkit-appearance: none; appearance: none;
+    }
+    .tranche-time:focus { outline: none; border-color: var(--cyan-vif); }
+    .tranche-sep { color: var(--gris-doux); font-size: 14px; text-align: center; }
+    .tranche-label { font-size: 11px; color: var(--gris-doux); text-align: center; margin-bottom: 12px; }
+    .bilan-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+    }
+    .bilan-row:last-child { border-bottom: none; }
+    .bilan-ok   { color: var(--vert-ok);     font-weight: 700; }
+    .bilan-warn { color: var(--orange-alrt); font-weight: 700; }
+    .bilan-low  { color: var(--rouge-alrt);  font-weight: 700; }
+    .bilan-conseil {
+      font-size: 11px; color: var(--gris-doux); line-height: 1.5;
+      margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+    }
   </style>
 </head>
 <body>
@@ -804,6 +832,45 @@
       </div>
     </div>
 
+    <p class="section-title">⚡ Pompe &amp; filtration</p>
+    <div class="card">
+      <div class="card-title">Tranche 1 — Journée</div>
+      <div class="tranche-grid">
+        <input type="time" id="tranche1-debut" class="tranche-time" value="11:00"
+               onchange="sauvegarderTranches()" />
+        <span class="tranche-sep">→</span>
+        <input type="time" id="tranche1-fin" class="tranche-time" value="15:00"
+               onchange="sauvegarderTranches()" />
+      </div>
+      <div class="tranche-label">ex. 11h → 15h (soleil, chlore actif)</div>
+
+      <div class="card-title" style="margin-top:4px">Tranche 2 — Soirée</div>
+      <div class="tranche-grid">
+        <input type="time" id="tranche2-debut" class="tranche-time" value="19:00"
+               onchange="sauvegarderTranches()" />
+        <span class="tranche-sep">→</span>
+        <input type="time" id="tranche2-fin" class="tranche-time" value="21:00"
+               onchange="sauvegarderTranches()" />
+      </div>
+      <div class="tranche-label">ex. 19h → 21h (après baignade)</div>
+
+      <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
+        <div class="bilan-row">
+          <span style="color:var(--gris-doux)">Total programmé / jour</span>
+          <strong id="bilan-total">-- h</strong>
+        </div>
+        <div class="bilan-row">
+          <span style="color:var(--gris-doux)">Recommandé (T°÷2)</span>
+          <span id="bilan-recommande" style="color:var(--gris-doux)">Saisis la T° sur l'accueil</span>
+        </div>
+        <div class="bilan-row">
+          <span style="color:var(--gris-doux)">Statut</span>
+          <strong id="bilan-statut">--</strong>
+        </div>
+        <div id="bilan-conseil" class="bilan-conseil" style="display:none"></div>
+      </div>
+    </div>
+
     <p class="section-title">🔑 Connexion IA</p>
     <div class="param-row">
       <div class="param-row-label">Clé API Anthropic</div>
@@ -830,7 +897,7 @@
     <p class="section-title">ℹ️ Appli</p>
     <div class="param-row">
       <div class="param-row-label">Version</div>
-      <div class="param-row-val"><span>Tranche 5 · Juin 2026 · PWA</span></div>
+      <div class="param-row-val"><span>Tranche 6 · Juin 2026 · PWA</span></div>
     </div>
     <div class="param-row">
       <div class="param-row-label">Volume piscine</div>
@@ -1233,29 +1300,37 @@ async function exporterExcel() {
   URL.revokeObjectURL(url);
 }
 
-/* ══ OVERRIDE majDashboard pour sauvegarder en IndexedDB ══ */
+/* ══ OVERRIDE majDashboard pour sauvegarder (Tranche 4) ══ */
 const _majDashboardOriginal = majDashboard;
 majDashboard = async function(vals) {
-  _majDashboardOriginal(vals);
-  // Sauvegarde l'analyse
+  await _majDashboardOriginal(vals);           // mise à jour tuiles + timestamp
   const conseil = document.getElementById('conseil-text')?.textContent || '';
   try {
-    await sauvegarderAnalyse(vals, conseil);
-    // Recharge l'historique si on est dessus
+    await sauvegarderAnalyse(vals, conseil);   // sauvegarde unique ici
+    majCompteurAnalyses();
     if (document.getElementById('screen-historique').classList.contains('active')) {
       await majHistorique();
     }
   } catch(e) {
-    console.warn('Sauvegarde IndexedDB:', e);
+    console.warn('Sauvegarde:', e);
   }
 };
 
-/* ══ OVERRIDE goTo pour charger l'historique à la demande ══ */
+/* ══ OVERRIDE goTo pour charger les données à la demande ══ */
 const _goToOriginal = goTo;
 goTo = async function(name) {
   _goToOriginal(name);
-  if (name === 'historique') await majHistorique();
-  if (name === 'params') chargerApiKey();
+  if (name === 'historique') {
+    await majHistorique();
+  }
+  if (name === 'params') {
+    chargerApiKey();
+    chargerTranches();
+  }
+  if (name === 'dashboard') {
+    const analyses = await lireAnalyses();
+    if (analyses.length > 0) rechargerTuilesDashboard(analyses[0]);
+  }
 };
 
 /* ══ INIT DB + ÉTAT FILTRE ══ */
@@ -1293,6 +1368,9 @@ goTo = async function(name) {
     const derniere = analyses[0]; // plus récente en premier
     rechargerTuilesDashboard(derniere);
   }
+
+  // Charger les tranches horaires pompe
+  chargerTranches();
 
   // Demander permission notifications
   demanderNotifications();
@@ -1407,13 +1485,16 @@ initFiltre = async function(heures) {
   await sauvegarderConfig('filtreHeures', state.filtreHeures);
 };
 
-/* ══ OVERRIDE accumulerFiltration pour persister ══ */
+/* ══ OVERRIDE accumulerFiltration pour persister + heures réelles ══ */
 const _accumulerOriginal = accumulerFiltration;
 accumulerFiltration = async function(heures) {
   const aujourd = new Date().toDateString();
   if (state.filtreDate === aujourd) return;
+  // Si des tranches horaires sont configurées, utilise les heures réelles
+  const hReelles = heuresFiltrationReelles();
+  const hUsed = hReelles > 0 ? hReelles : heures;
   state.filtreDate   = aujourd;
-  state.filtreHeures = Math.min(DOSAGES.FILTRE_DUREE_VIE, state.filtreHeures + heures);
+  state.filtreHeures = Math.min(DOSAGES.FILTRE_DUREE_VIE, state.filtreHeures + hUsed);
   majJaugeFiltre();
   lsSetConfig('filtreHeures', state.filtreHeures);
   lsSetConfig('filtreDate',   state.filtreDate);
@@ -1474,8 +1555,8 @@ document.getElementById('temp-eau').addEventListener('input', function() {
   if (!isNaN(t) && t >= 10 && t <= 40) {
     const h = Math.max(1, t / 2).toFixed(1).replace('.', ',');
     el.textContent = h + ' h/jour';
-    // Accumule les heures si une T° est saisie (1 saisie = 1 jour de filtration)
     accumulerFiltration(parseFloat((t / 2).toFixed(1)));
+    majBilanFiltration(); // met à jour le bilan dans Réglages
   } else {
     el.textContent = '-- h/jour';
   }
@@ -1559,10 +1640,8 @@ function validerHeures() {
   initFiltre(Math.min(h, DOSAGES.FILTRE_DUREE_VIE));
 }
 
-// Afficher le modal au premier lancement
+// Initialisation jauge filtre (le modal est géré par l'IIFE async selon premierLancement)
 (function() {
-  // En tranche 4, on vérifiera IndexedDB. Pour l'instant, toujours afficher.
-  document.getElementById('modal-firstlaunch').classList.remove('hidden');
   majJaugeFiltre();
 })();
 
@@ -1809,11 +1888,11 @@ async function afficherResultats(vals, actions) {
   card.style.display = 'block';
   card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  // Met à jour le tableau de bord et sauvegarde
+  // Met à jour le tableau de bord (sauvegarde gérée par l'override Tranche 4)
   await majDashboard(vals);
 }
 
-/* ══ MAJ DASHBOARD + SAUVEGARDE DIRECTE ══ */
+/* ══ MAJ DASHBOARD ══ */
 async function majDashboard(vals) {
   function setTile(id, val, unit, min, max, dec) {
     const el = document.getElementById(id);
@@ -1833,20 +1912,120 @@ async function majDashboard(vals) {
   const now = new Date();
   const heure = now.getHours() + 'h' + String(now.getMinutes()).padStart(2,'0');
   document.getElementById('last-test-age').textContent = 'Aujourd\'hui à ' + heure;
-
-  // ── SAUVEGARDE DIRECTE ICI ──
-  try {
-    const conseil = document.getElementById('conseil-text')?.textContent || '';
-    await sauvegarderAnalyse(vals, conseil);
-    majCompteurAnalyses();
-  } catch(e) {
-    console.warn('Erreur sauvegarde:', e);
-  }
+  // La sauvegarde est faite par l'override Tranche 4 ci-dessous
 }
 
 /* ══ INIT ══ */
 majJaugeFiltre();
 chargerApiKey();
+
+/* ══════════════════════════════════════════
+   TRANCHE 6 — POMPE & FILTRATION
+══════════════════════════════════════════ */
+
+/* ── Helpers calcul durée ── */
+function hhmm2min(t) {
+  if (!t) return 0;
+  const parts = t.split(':').map(Number);
+  return parts[0] * 60 + (parts[1] || 0);
+}
+
+function dureeTranche(debut, fin) {
+  const d = hhmm2min(debut), f = hhmm2min(fin);
+  return f > d ? (f - d) / 60 : 0; // en heures
+}
+
+function heuresFiltrationReelles() {
+  const t1d = lsGetConfigKey('pompe_t1d') || '11:00';
+  const t1f = lsGetConfigKey('pompe_t1f') || '15:00';
+  const t2d = lsGetConfigKey('pompe_t2d') || '19:00';
+  const t2f = lsGetConfigKey('pompe_t2f') || '21:00';
+  return dureeTranche(t1d, t1f) + dureeTranche(t2d, t2f);
+}
+
+/* ── Sauvegarde des tranches ── */
+function sauvegarderTranches() {
+  const get = id => document.getElementById(id)?.value || '';
+  const t1d = get('tranche1-debut') || '11:00';
+  const t1f = get('tranche1-fin')   || '15:00';
+  const t2d = get('tranche2-debut') || '19:00';
+  const t2f = get('tranche2-fin')   || '21:00';
+  lsSetConfig('pompe_t1d', t1d);
+  lsSetConfig('pompe_t1f', t1f);
+  lsSetConfig('pompe_t2d', t2d);
+  lsSetConfig('pompe_t2f', t2f);
+  majBilanFiltration();
+}
+
+/* ── Chargement des tranches dans l'UI ── */
+function chargerTranches() {
+  const set = (id, key, def) => {
+    const el = document.getElementById(id);
+    if (el) el.value = lsGetConfigKey(key) || def;
+  };
+  set('tranche1-debut', 'pompe_t1d', '11:00');
+  set('tranche1-fin',   'pompe_t1f', '15:00');
+  set('tranche2-debut', 'pompe_t2d', '19:00');
+  set('tranche2-fin',   'pompe_t2f', '21:00');
+  majBilanFiltration();
+}
+
+/* ── Bilan filtration ── */
+function majBilanFiltration() {
+  const elTotal   = document.getElementById('bilan-total');
+  const elReco    = document.getElementById('bilan-recommande');
+  const elStatut  = document.getElementById('bilan-statut');
+  const elConseil = document.getElementById('bilan-conseil');
+  if (!elTotal) return;
+
+  const hReelles = heuresFiltrationReelles();
+  elTotal.textContent = hReelles.toFixed(1).replace('.', ',') + ' h';
+
+  // T° eau en cours
+  const temp = parseFloat(document.getElementById('temp-eau')?.value);
+  if (isNaN(temp)) {
+    elReco.textContent = 'Saisis la T° sur l\'accueil';
+    elReco.className   = '';
+    elStatut.textContent = '--';
+    elStatut.className   = '';
+    if (elConseil) elConseil.style.display = 'none';
+    return;
+  }
+
+  const hReco  = Math.max(1, temp / 2);
+  elReco.textContent = hReco.toFixed(1).replace('.', ',') + ' h (T° ' + temp + '°C)';
+  elReco.className   = '';
+
+  const ratio  = hReelles / hReco;
+  let statutTxt, statutCls, conseil = '';
+
+  if (ratio >= 1.0) {
+    statutTxt = '✅ Suffisant';
+    statutCls = 'bilan-ok';
+  } else if (ratio >= 0.8) {
+    statutTxt = '⚠️ Légèrement court';
+    statutCls = 'bilan-warn';
+    const manque = (hReco - hReelles).toFixed(1).replace('.', ',');
+    conseil = 'Il manque ~' + manque + ' h. Prolonge la tranche de jour : c\'est là que le chlore travaille le mieux.';
+  } else {
+    statutTxt = '🔴 Insuffisant';
+    statutCls = 'bilan-low';
+    const manque = (hReco - hReelles).toFixed(1).replace('.', ',');
+    conseil = manque + ' h de filtration manquantes. Étends la tranche 1 vers 17h-18h. La filtration de nuit seule est deux fois moins efficace.';
+  }
+
+  elStatut.textContent = statutTxt;
+  elStatut.className   = statutCls;
+
+  if (elConseil) {
+    if (conseil) {
+      elConseil.textContent    = conseil;
+      elConseil.style.display  = 'block';
+    } else {
+      elConseil.style.display  = 'none';
+    }
+  }
+}
 
 /* ══════════════════════════════════════════
    TRANCHE 3 — CLAUDE IA
